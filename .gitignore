@@ -57,3 +57,10 @@ dkms.conf
 private.*
 .idea/
 __pycache__/
+
+# for device
+build/
+.vscode/
+.devcontainer/
+sdkconfig
+sdkconfig.old

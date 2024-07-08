@@ -14,6 +14,7 @@
 
 #define MAX_HTTP_OUTPUT_BUFFER 25596
 
+#define SEND_ATTEMPS_MAX 5
 
 static int read_response(void);
 static void send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type);
@@ -26,9 +27,18 @@ static esp_http_client_handle_t _client = { 0 };
 
 t_track_list _track_list = { 0 };
 
+#define BUF_SIZE_REPEAT_MSG 64
+static struct _repeat_msg
+{
+    u8_t buf[BUF_SIZE_REPEAT_MSG];
+    u16_t buf_len;
+    u8_t pack_type;
+} repeat_msg;
+
 void polling_server(void);
 void send_syn(void);
 void send_statys(void);
+void repeat_send(void);
 
 void send_com_event(char* msg);
 void register_com_event(void);
@@ -207,16 +217,24 @@ s32_t parse_responce(u8_t* buf, u16_t len)
     if (buf == NULL)
         return -1;
 
+    static u8_t repeat_count = 0;
     t_csp_head* phead = (t_csp_head*)buf;
-    printf("id = %02X type = %02X size = %04X crc = %02X\n", 
-    phead->id, phead->msg_type, phead->body_len, phead->crc);
+    // printf("id = %02X type = %02X size = %04X crc = %02X\n", 
+    // phead->id, phead->msg_type, phead->body_len, phead->crc);
     u8_t* pbody = integrity_check(buf, len);
+
     if (pbody == NULL)
     {
         printf("ERROR: crc\n");
-        return -2;
-    }
+        if (repeat_count >= SEND_ATTEMPS_MAX)
+            return -2;
 
+        printf("WARNING: try repaet sending\n");
+        repeat_send();
+        repeat_count += 1;
+        return 0;
+    }
+    repeat_count = 0;
     if (phead->id != device_id && device_id)
     {
         printf("Not to me\n");
@@ -266,14 +284,14 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 
 u16_t read_track_data(t_csp_track_pack* ptrack_pack)
 {
-    if (ptrack_pack->track_format == ECSP_TRACK_FORMAT_MP3)
-        printf("TRACK FROMAT: mp3\n");
-    else 
-        printf("TRACK FROMAT: sbc\n");
+    // if (ptrack_pack->track_format == ECSP_TRACK_FORMAT_MP3)
+    //     printf("TRACK FROMAT: mp3\n");
+    // else 
+    //     printf("TRACK FROMAT: sbc\n");
 
-    printf("TRACK HASH: %04X\n", ptrack_pack->track_id);
-    printf("TRACK PACK TOATAL: %d\n", ptrack_pack->pack_total);
-    printf("TRACK PACK NUMBER: %d\n", ptrack_pack->pack_num);
+    // printf("TRACK HASH: %04X\n", ptrack_pack->track_id);
+    printf("TRACK PACK TOATAL: %d ", ptrack_pack->pack_total);
+    printf("TRACK PACK NUMBER: %d\n\n", ptrack_pack->pack_num);
     if (ptrack_pack->pack_num == ptrack_pack->pack_total - 1)
     {
         printf("CONGRATULATIONS\nCONGRATULATIONS\n");
@@ -298,7 +316,7 @@ void switch_playlist(t_csp_track_req* ptrack_req, u16_t len)
 
 void send_track_req(u16_t hash_track_name, u16_t pack_num)
 {
-    printf("TRACK REQUEST: %d\n", pack_num);
+    // printf("TRACK REQUEST: %d\n", pack_num);
     u8_t pack_buf[ DEFAULT_PACK_LEN ] = { 0 };
     t_csp_head head = create_pack_head(ECSP_COM_GET_TRACK, sizeof(t_csp_status));
     t_csp_track_req body = {
@@ -314,6 +332,11 @@ void send_track_req(u16_t hash_track_name, u16_t pack_num)
     send_to_serv((u8_t*)&pack_buf, pack_len, head.msg_type);
 }
 
+void repeat_send(void)
+{
+    send_to_serv(repeat_msg.buf, repeat_msg.buf_len, repeat_msg.pack_type);
+}
+
 
 void ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len)
 {
@@ -324,13 +347,26 @@ void ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len)
 
 static void send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type)
 {
+    if (buf_len < BUF_SIZE_REPEAT_MSG)
+    {// copy mesage to repeat if transmition fail
+        memcpy(repeat_msg.buf, buf, buf_len);
+        repeat_msg.buf_len = buf_len;
+        repeat_msg.pack_type = pack_type;
+    }
     set_req_url(pack_type);
     esp_http_client_set_timeout_ms_user(_client, 500);
-    int result = 0;
-    if (buf_len == 0)
-        result = send_get_req();
-    else
-        result = send_post_req(buf, buf_len);
+    int result = -1;
+    int send_attemps = 0;
+    while (send_attemps < SEND_ATTEMPS_MAX && result < 0)
+    {
+        if (send_attemps)
+            printf("WARNING: attemp to send: %d\n", send_attemps);
+        
+        result = (buf_len == 0) ? send_get_req() : send_post_req(buf, buf_len);
+        send_attemps += 1;
+        if (result < 0)
+            vTaskDelay(2 / portTICK_PERIOD_MS);
+    }
 
     if (result < 0 || result < buf_len)
         printf("ERROR: sending\n");
@@ -387,7 +423,8 @@ static int send_post_req(u8_t* buf, u16_t buf_len)
     esp_http_client_set_method_user(_client, HTTP_METHOD_POST);
     esp_err_t err = esp_http_client_open_user(_client, buf_len);
     if (err != ESP_OK) {
-        return (int)err;
+        printf("ERROR: Send post, val - %d\n", err);
+        return ((int)err < 0) ? (int)err : -(int)err;
     }
     return esp_http_client_write_user(_client, (char*)buf, buf_len);
 }

@@ -24,7 +24,7 @@ idf_component_register(
         "esp_wifi"
         "nvs_flash"
         "tcp_transport"
-        "http_parser"
+        "nghttp"
 )
 
 

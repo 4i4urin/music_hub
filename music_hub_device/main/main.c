@@ -13,8 +13,6 @@ void wifi_connect(void *task_param);
 
 void app_main(void)
 {
-    // disable watchdog
-    esp_task_wdt_deinit();
     
     nvs_flash_init();
    
@@ -23,10 +21,6 @@ void app_main(void)
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     xTaskCreate(task_http, "TASK_HTTP", 2 << 15, NULL, 2, NULL);
 
-    while (1)
-    {
-    
-    }
 }
 
 
@@ -111,7 +105,7 @@ static void test_on_ping_success(esp_ping_handle_t hdl, void *args)
     esp_ping_get_profile(hdl, ESP_PING_PROF_IPADDR, &target_addr, sizeof(target_addr));
     esp_ping_get_profile(hdl, ESP_PING_PROF_SIZE, &recv_len, sizeof(recv_len));
     esp_ping_get_profile(hdl, ESP_PING_PROF_TIMEGAP, &elapsed_time, sizeof(elapsed_time));
-    printf("%ld bytes from %s icmp_seq=%d ttl=%d time=%ld ms\n",
+    printf("%d bytes from %s icmp_seq=%d ttl=%d time=%d ms\n",
            recv_len, ip_ntoa(&target_addr), seqno, ttl, elapsed_time);
 }
 
@@ -133,7 +127,7 @@ static void test_on_ping_end(esp_ping_handle_t hdl, void *args)
     esp_ping_get_profile(hdl, ESP_PING_PROF_REQUEST, &transmitted, sizeof(transmitted));
     esp_ping_get_profile(hdl, ESP_PING_PROF_REPLY, &received, sizeof(received));
     esp_ping_get_profile(hdl, ESP_PING_PROF_DURATION, &total_time_ms, sizeof(total_time_ms));
-    printf("%ld packets transmitted, %ld received, time %ldms\n", transmitted, received, total_time_ms);
+    printf("%d packets transmitted, %d received, time %dms\n", transmitted, received, total_time_ms);
 }
 
 

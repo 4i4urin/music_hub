@@ -84,6 +84,7 @@ def build_track_pack(dev_id: int, track: Track, pack_num: int) -> bytes:
     body += bytearray(track.file_by_packs[pack_num])
 
     head: HeadCsp = HeadCsp.build(dev_id, TypesCsp.ECSP_TRACK_DATA, len(body))
+    head.print()
     return Package.build(head, body).full_pack
 
 

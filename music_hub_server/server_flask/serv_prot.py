@@ -41,7 +41,8 @@ class HeadCsp:
         head_burst: bytearray = bytearray(device_id.to_bytes(1, "little")) + \
             msg_type.value.to_bytes(1, "little") + \
             body_len.to_bytes(2, "little")
-        cls.bytes = head_burst + bytearray(Crc8.calc(head_burst).to_bytes(1, "little"))
+        cls.crc8 = Crc8.calc(head_burst)
+        cls.bytes = head_burst + bytearray(cls.crc8.to_bytes(1, "little"))
         return cls(cls.bytes)
 
 
@@ -75,6 +76,7 @@ class Package:
         else:
             pack_burst: bytearray = bytearray(head.bytes) + body
         crc16: bytearray = bytearray(Crc16Arc.calc(pack_burst).to_bytes(2, "little"))
+        print(crc16.hex(":"))
         return cls(pack_burst + crc16)
 
 

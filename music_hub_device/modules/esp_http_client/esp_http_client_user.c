@@ -253,7 +253,7 @@ static int http_on_headers_complete_user(http_parser *parser)
     client->response->data_offset = parser->nread;
     client->response->content_length = parser->content_length;
     client->response->data_process = 0;
-    ESP_LOGD(TAG, "http_on_headers_complete_user, status=%d, offset=%d, nread=%ld", parser->status_code, client->response->data_offset, parser->nread);
+    ESP_LOGD(TAG, "http_on_headers_complete_user, status=%d, offset=%d, nread=%d", parser->status_code, client->response->data_offset, parser->nread);
     client->state = HTTP_STATE_RES_COMPLETE_HEADER;
     if (client->connection_info.method == HTTP_METHOD_HEAD) {
         /* In a HTTP_RESPONSE parser returning '1' from on_headers_complete will tell the
@@ -1077,7 +1077,7 @@ int esp_http_client_read_user(esp_http_client_handle_t client, char *buffer, int
             if (errno != 0) {
                 esp_log_level_t sev = ESP_LOG_WARN;
                 /* Check for cleanly closed connection */
-                if (rlen == ERR_TCP_TRANSPORT_CONNECTION_CLOSED_BY_FIN && client->response->is_chunked) {
+                if (rlen == ESP_ERR_ESP_TLS_CONNECTION_TIMEOUT && client->response->is_chunked) {
                     /* Explicit call to parser for invoking `message_complete` callback */
                     http_parser_execute(client->parser, client->parser_settings, res_buffer->data, 0);
                     /* ...and lowering the message severity, as closed connection from server side is expected in chunked transport */
@@ -1086,7 +1086,7 @@ int esp_http_client_read_user(esp_http_client_handle_t client, char *buffer, int
                 ESP_LOG_LEVEL(sev, TAG, "esp_transport_read returned:%d and errno:%d ", rlen, errno);
             }
 
-            if (rlen == ERR_TCP_TRANSPORT_CONNECTION_TIMEOUT) {
+            if (rlen == ESP_ERR_ESP_TLS_CONNECTION_TIMEOUT) {
                 ESP_LOGD(TAG, "Connection timed out before data was ready!");
                 /* Returning the number of bytes read upto the point where connection timed out */
                 if (ridx) {
@@ -1095,9 +1095,9 @@ int esp_http_client_read_user(esp_http_client_handle_t client, char *buffer, int
                 return -ESP_ERR_HTTP_EAGAIN;
             }
 
-            if (rlen != ERR_TCP_TRANSPORT_CONNECTION_CLOSED_BY_FIN) {
-                esp_err_t err = esp_transport_translate_error(rlen);
-                ESP_LOGE(TAG, "transport_read: error - %d | %s", err, esp_err_to_name(err));
+            if (rlen != ESP_ERR_HTTP_CONNECTION_CLOSED) {
+                // esp_err_t err = esp_transport_get_errno(rlen);
+                ESP_LOGE(TAG, "transport_read: error - %d", rlen);
             }
 
             if (rlen < 0 && ridx == 0 && !esp_http_client_is_complete_data_received_user(client)) {
@@ -1239,7 +1239,7 @@ int64_t esp_http_client_fetch_headers_user(esp_http_client_handle_t client)
     while (client->state < HTTP_STATE_RES_COMPLETE_HEADER) {
         buffer->len = esp_transport_read(client->transport, buffer->data, client->buffer_size_rx, client->timeout_ms);
         if (buffer->len <= 0) {
-            if (buffer->len == ERR_TCP_TRANSPORT_CONNECTION_TIMEOUT) {
+            if (buffer->len == ESP_ERR_ESP_TLS_CONNECTION_TIMEOUT) {
                 ESP_LOGW(TAG, "Connection timed out before data was ready!");
                 return -ESP_ERR_HTTP_EAGAIN;
             }
@@ -1684,7 +1684,7 @@ int esp_http_client_read(esp_http_client_handle_t client, char * buffer_r, int m
     while (client->state < HTTP_STATE_RES_COMPLETE_HEADER) {
         buffer->len = esp_transport_read(client->transport, buffer->data, client->buffer_size_rx, client->timeout_ms);
         if (buffer->len <= 0) {
-            if (buffer->len == ERR_TCP_TRANSPORT_CONNECTION_TIMEOUT) {
+            if (buffer->len == ESP_ERR_ESP_TLS_CONNECTION_TIMEOUT) {
                 return -ESP_ERR_HTTP_EAGAIN;
             }
             return ESP_FAIL;

@@ -10,6 +10,7 @@ idf_component_register(
 
         "../tasks/task_http.c"
         "../tasks/task_test_com.c"
+        "../tasks/task_sdcard.c"
 
     INCLUDE_DIRS 
         "."
@@ -25,6 +26,7 @@ idf_component_register(
         "nvs_flash"
         "tcp_transport"
         "nghttp"
+        "esp_peripherals"
 )
 
 

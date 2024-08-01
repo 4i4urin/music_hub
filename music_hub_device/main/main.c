@@ -7,6 +7,7 @@
 
 #include "task_http.h"
 #include "task_test_com.h"
+#include "task_sdcard.h"
 #include "private.h"
 
 void wifi_connect(void *task_param);
@@ -16,10 +17,11 @@ void app_main(void)
     
     nvs_flash_init();
    
-    xTaskCreate(task_test_com, "TEST_COM", 2 << 10, NULL, 3, NULL);
-    xTaskCreate(wifi_connect, "WIFI", 2 << 11, NULL, 1, NULL);
+    xTaskCreate(task_test_com, "TEST_COM", 1 << 10, NULL, 3, NULL);
+    xTaskCreate(wifi_connect, "WIFI", 1 << 12, NULL, 1, NULL);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    xTaskCreate(task_http, "TASK_HTTP", 2 << 15, NULL, 2, NULL);
+    xTaskCreate(task_http, "TASK_HTTP", 1 << 16, NULL, 2, NULL);
+    xTaskCreate(task_sdcard, "TASK_SDCARD", 1 << 11, NULL, 2, NULL);
 
 }
 

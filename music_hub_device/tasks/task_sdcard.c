@@ -15,26 +15,28 @@ static u16_t build_path(char* path, const char* file_name, const u16_t max_path_
 static esp_periph_set_handle_t init_sdcard(void);
 
 // DBG
-static const char write_buf[] = 
-"The machines rose from the ashes of the nuclear fire. Their war to exterminate\n"
-"mankind had raged for decades, but the final battle would not be fought in the future. It\n"
-"would be fought here, in our present. Tonight\n\n";
+static const char write_buf[5][80] = {
+    "The machines rose from the ashes of the nuclear fire.\n",
+    "Their war to exterminate mankind had raged for decades,\n",
+    "but the final battle would not be fought in the future.\n",
+    "It would be fought here, in our present.\n",
+    "Tonight\n\n"
+};
 
 
 void task_sdcard(void* task_args)
 {
     esp_periph_set_handle_t periph = init_sdcard();
     s32_t status = 0, count = 0;
+    // DBG
     while (1)
     {
         vTaskDelay(2000 / portTICK_PERIOD_MS);
 
-        if (count > 5)
-        {
-            printf("WARNING: SDCARD Stop writing count = %d\n", count);
-            continue;
-        }
-        status = sdcard_add_to_file("Terminator.txt", (u8_t*)&write_buf[0], strlen(write_buf));
+        if (count > 4)
+            count = 0;
+
+        status = sdcard_add_to_file("Terminator.txt", (u8_t*)&write_buf[count], strlen(write_buf[count]));
         if (status <= 0)
             printf("ERROR: SDCARD Can't transmit data count = %d status = %d\n", count, status);
         else
@@ -69,12 +71,13 @@ s32_t sdcard_add_to_file(const char* file_name, u8_t* buf, u32_t buf_len)
     }
 
     const char* path_ptr = &path[0];
-    s32_t file = open(path_ptr, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+    // O_APPEND  O_WRONLY
+    s32_t file = open(path_ptr, O_RDWR | O_APPEND | O_CREAT);
     if (file == -1) {
         printf("Failed to open. File name: %s\n", path);
         return file;
     }
-
+    // vTaskDelay(10 / portTICK_PERIOD_MS);
     s32_t wlen = write(file, buf, buf_len);
     fsync(file);
     if (wlen == -1) {
@@ -97,6 +100,7 @@ static u16_t build_path(char* path, const char* file_name, const u16_t max_path_
         path[i] = file_name[i - start_len];
 
     path[path_len] = 0;
+    // DBG
     printf("PATH = %s\n", path);
     return strlen(path);
 }

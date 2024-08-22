@@ -11,6 +11,12 @@
 #include "private.h"
 
 
+#include "client_serv_prot.h"
+
+
+volatile QueueHandle_t QueueHttpSD;
+
+
 void wifi_connect(void *task_param);
 
 void app_main(void)
@@ -18,11 +24,13 @@ void app_main(void)
     
     nvs_flash_init();
    
-    xTaskCreate(task_test_com, "TEST_COM", 1 << 10, NULL, 3, NULL);
+    // xTaskCreate(task_test_com, "TEST_COM", 1 << 10, NULL, 3, NULL);
     xTaskCreate(wifi_connect, "WIFI", 1 << 12, NULL, 1, NULL);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    xTaskCreate(task_http, "TASK_HTTP", 1 << 16, NULL, 2, NULL);
-    xTaskCreate(task_sdcard, "TASK_SDCARD", 1 << 11, NULL, 2, NULL);
+
+    QueueHttpSD = xQueueCreate(1, sizeof(t_csp_track_pack));
+    xTaskCreate(task_http, "TASK_HTTP", 1 << 15, NULL, 2, NULL);
+    xTaskCreate(task_sdcard, "TASK_SDCARD", 1 << 14, NULL, 2, NULL);
 
 }
 

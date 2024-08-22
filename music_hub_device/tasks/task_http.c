@@ -12,6 +12,7 @@
 #include "status.h"
 #include "private.h"
 
+
 #define MAX_HTTP_OUTPUT_BUFFER 25596
 
 #define SEND_ATTEMPS_MAX 5
@@ -53,10 +54,11 @@ void ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len);
 void switch_playlist(t_csp_track_req* ptrack_req, u16_t len);
 void send_track_req(u16_t hash_track_name, u16_t pack_num);
 u16_t read_track_data(t_csp_track_pack* ptrack_pack);
+u8_t send_track_data_user(t_csp_track_pack* ptrack_pack);
 
 static u8_t device_id = 0;
-static u8_t _dbg_block = 0;
-
+static u8_t http_status = E_HTTP_STATUS_IDEL;
+extern volatile QueueHandle_t QueueHttpSD;
 
 void task_http(void *task_param)
 {
@@ -66,23 +68,29 @@ void task_http(void *task_param)
     };
     _client = esp_http_client_init_user(&config);
 
-    register_com_event();
+    // register_com_event();
+
+    u32_t task_delay = 1000 / portTICK_PERIOD_MS;
 
     while(1)
     {
-        if ( !device_id)
-            send_syn();
-        else if ( !_dbg_block )
-            send_statys();
-
+        if ( http_status == E_HTTP_STATUS_IDEL )
+        {
+            task_delay = 1000 / portTICK_PERIOD_MS;
+            if ( !device_id)
+                send_syn();
+            else
+                send_statys();
+        }
+        
         esp_http_client_set_timeout_ms_user(_client, 1);
         if (esp_http_client_poll_read_user(_client) > 0)
             read_response();
+        
+        if ( http_status == E_HTTP_STATUS_WORK)
+            task_delay = 300 / portTICK_PERIOD_MS;
 
-        if (_dbg_block)
-            vTaskDelay(25 / portTICK_PERIOD_MS);
-        else
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(task_delay);
     }
 }
 
@@ -249,8 +257,15 @@ s32_t parse_responce(u8_t* buf, u16_t len)
         case ECSP_TRACK_DATA:
             printf("GET TRACK DATA\n");
             read_track_data((t_csp_track_pack*)pbody);
+            send_track_data_user((t_csp_track_pack*)pbody);
+            http_status = E_HTTP_STATUS_WORK;
+
             if (((t_csp_track_pack*)pbody)->pack_num == ((t_csp_track_pack*)pbody)->pack_total - 1)
+            {
+                // TODO: ASK NEXT TRACK
+                http_status = E_HTTP_STATUS_IDEL;
                 break;
+            }
             send_track_req(
                 ((t_csp_track_pack*)pbody)->track_id,
                 ((t_csp_track_pack*)pbody)->pack_num + 1
@@ -265,6 +280,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
         case ECSP_COM_VOL_DEC:
         case ECSP_COM_SWITCH_LIST:
             printf("SWITCH PLAY LIST\n");
+            http_status = E_HTTP_STATUS_WORK;
             switch_playlist((t_csp_track_req*)pbody, phead->body_len);
             return phead->body_len;
         case ECSP_COM_GET_TRACK:
@@ -282,21 +298,36 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 }
 
 
+u8_t send_track_data_user(t_csp_track_pack* ptrack_pack)
+{
+    const u8_t queue_send_timout = 5;
+    u8_t send_try_count = 0;
+    while (1)
+    {
+        if ( xQueueSend( QueueHttpSD, (void*)ptrack_pack, queue_send_timout ) == pdPASS )
+        {
+            printf("HTTP QUEUE: send successe\n");
+            printf("track_num = %d\n\n", ptrack_pack->track_id);
+            break;
+        }
+        send_try_count += 1;
+        if (send_try_count == 5)
+        {
+            printf("HTTP QUEUE: send FAILD\n");
+            return -1;
+        }
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
+    return 0;
+}
+
+
 u16_t read_track_data(t_csp_track_pack* ptrack_pack)
 {
-    // if (ptrack_pack->track_format == ECSP_TRACK_FORMAT_MP3)
-    //     printf("TRACK FROMAT: mp3\n");
-    // else 
-    //     printf("TRACK FROMAT: sbc\n");
-
-    // printf("TRACK HASH: %04X\n", ptrack_pack->track_id);
     printf("TRACK PACK TOATAL: %d ", ptrack_pack->pack_total);
     printf("TRACK PACK NUMBER: %d\n\n", ptrack_pack->pack_num);
     if (ptrack_pack->pack_num == ptrack_pack->pack_total - 1)
-    {
         printf("CONGRATULATIONS\nCONGRATULATIONS\n");
-        _dbg_block = 0;
-    }
     return ptrack_pack->pack_num + 1;
 }
 
@@ -309,14 +340,12 @@ void switch_playlist(t_csp_track_req* ptrack_req, u16_t len)
     _track_list.next.statys = TRACK_ST_TRANSMITTED;
     _track_list.next.size = (ptrack_req->amount_packs - 1) * MAX_TRACK_DATA;
     
-    _dbg_block = 1;
     send_track_req(ptrack_req->track_id, 0);
 }
 
 
 void send_track_req(u16_t hash_track_name, u16_t pack_num)
 {
-    // printf("TRACK REQUEST: %d\n", pack_num);
     u8_t pack_buf[ DEFAULT_PACK_LEN ] = { 0 };
     t_csp_head head = create_pack_head(ECSP_COM_GET_TRACK, sizeof(t_csp_status));
     t_csp_track_req body = {

@@ -55,6 +55,7 @@ void switch_playlist(t_csp_track_req* ptrack_req, u16_t len);
 void send_track_req(u16_t hash_track_name, u16_t pack_num);
 u16_t read_track_data(t_csp_track_pack* ptrack_pack);
 u8_t send_track_data_user(t_csp_track_pack* ptrack_pack);
+t_csp_track_list* read_tracklist(t_csp_track_list* ptracklist_hash);
 
 static u8_t device_id = 0;
 static u8_t http_status = E_HTTP_STATUS_IDEL;
@@ -118,11 +119,14 @@ void send_statys(void)
 {
     u8_t pack_buf[ DEFAULT_PACK_LEN ] = { 0 };
     t_csp_head head = create_pack_head(ECSP_STATUS, sizeof(t_csp_status));
+
+    t_csp_track_list tracklist_hash = { 0 };
+    read_tracklist(&tracklist_hash);
     t_csp_status body = { 
         .track_list_hash = {
-            .prev   = 0xFFFF,
-            .current = 0xFF00,
-            .next   = 0x00FF,
+            .prev   = tracklist_hash.prev,
+            .current = tracklist_hash.current,
+            .next   = tracklist_hash.next,
         },
         .volume_lvl = 0,
         .devices = { .count = 0 }
@@ -134,6 +138,15 @@ void send_statys(void)
     );
 
     send_to_serv((u8_t*)&pack_buf, pack_len, head.msg_type);
+}
+
+
+t_csp_track_list* read_tracklist(t_csp_track_list* ptracklist_hash)
+{
+    ptracklist_hash->current = _track_list.current.hash_name;
+    ptracklist_hash->next = _track_list.next.hash_name;
+    ptracklist_hash->prev = _track_list.prev.hash_name;
+    return ptracklist_hash;
 }
 
 
@@ -227,8 +240,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 
     static u8_t repeat_count = 0;
     t_csp_head* phead = (t_csp_head*)buf;
-    // printf("id = %02X type = %02X size = %04X crc = %02X\n", 
-    // phead->id, phead->msg_type, phead->body_len, phead->crc);
+    
     u8_t* pbody = integrity_check(buf, len);
 
     if (pbody == NULL)
@@ -264,6 +276,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
             {
                 // TODO: ASK NEXT TRACK
                 http_status = E_HTTP_STATUS_IDEL;
+                // req_next_track();
                 break;
             }
             send_track_req(
@@ -298,6 +311,13 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 }
 
 
+// void req_next_track(void)
+// {
+//     // next track is request with 0 hash and 0 len
+//     send_track_req(0, 0);
+// }
+
+
 u8_t send_track_data_user(t_csp_track_pack* ptrack_pack)
 {
     const u8_t queue_send_timout = 5;
@@ -328,6 +348,7 @@ u16_t read_track_data(t_csp_track_pack* ptrack_pack)
     printf("TRACK PACK NUMBER: %d\n\n", ptrack_pack->pack_num);
     if (ptrack_pack->pack_num == ptrack_pack->pack_total - 1)
         printf("CONGRATULATIONS\nCONGRATULATIONS\n");
+        
     return ptrack_pack->pack_num + 1;
 }
 
@@ -336,9 +357,9 @@ void switch_playlist(t_csp_track_req* ptrack_req, u16_t len)
 {
     printf("track id = %04X\n", ptrack_req->track_id);
     printf("amount packs = %04X\n", ptrack_req->amount_packs);
-    _track_list.next.hash_name = ptrack_req->track_id;
-    _track_list.next.statys = TRACK_ST_TRANSMITTED;
-    _track_list.next.size = (ptrack_req->amount_packs - 1) * MAX_TRACK_DATA;
+    _track_list.current.hash_name = ptrack_req->track_id;
+    _track_list.current.statys = TRACK_ST_TRANSMITTED;
+    _track_list.current.size = (ptrack_req->amount_packs - 1) * MAX_TRACK_DATA;
     
     send_track_req(ptrack_req->track_id, 0);
 }

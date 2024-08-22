@@ -104,7 +104,8 @@ typedef struct _t_csp_track_pack
     u8_t track_format;    // format of track file
     u16_t track_id;             // hash of track name
     u16_t pack_total;           // amount of track packs in the one track
-    u16_t pack_num;             // number of track packege in sequence from 0 
+    u16_t pack_num;             // number of track packege in sequence from 0
+    u16_t track_len;            // number of useable bytes in track field
     u8_t track[MAX_TRACK_DATA];    // binary track data
 } t_csp_track_pack;
 

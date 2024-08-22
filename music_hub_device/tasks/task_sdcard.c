@@ -53,7 +53,7 @@ void task_sdcard(void* task_args)
             continue; // ????? DO NOT KNOW WHAT TO DO
         get_file_name(pqueue_data, file_name, MAX_FILE_NAME_LEN);
 
-        status = sdcard_add_to_file(file_name, (u8_t*)pqueue_data->track, sizeof(pqueue_data->track));
+        status = sdcard_add_to_file(file_name, (u8_t*)pqueue_data->track, pqueue_data->track_len);
         // status = sdcard_add_to_file("Terminator.txt", (u8_t*)&write_buf[count], strlen(write_buf[count]));
         if (status <= 0)
             printf("ERROR: SDCARD Can't transmit data count = %d status = %d\n", count, status);

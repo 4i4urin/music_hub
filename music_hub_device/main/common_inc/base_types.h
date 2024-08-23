@@ -11,4 +11,10 @@ typedef int8_t      s8_t;
 typedef int16_t     s16_t;
 typedef int32_t     s32_t;
 
+// ??? DBG
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+
+
 #endif /* BASE_TYPES */

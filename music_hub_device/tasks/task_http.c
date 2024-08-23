@@ -1,16 +1,16 @@
 #include "task_http.h"
 
-#include "task_test_com.h"
 
 #include "esp_http_client_user.h"
 
 #include "base_types.h"
 
-#include "crc.h"
-
 #include "client_serv_prot.h"
-#include "status.h"
+// #include "status.h"
 #include "private.h"
+
+#include "cserver_com_sender.h"
+#include "cserver_com_receiver.h"
 
 
 #define MAX_HTTP_OUTPUT_BUFFER 25596
@@ -18,7 +18,6 @@
 #define SEND_ATTEMPS_MAX 5
 
 static int read_response(void);
-static void send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type);
 
 
 static int send_get_req(void);
@@ -26,41 +25,29 @@ static int send_post_req(u8_t* buf, u16_t buf_len);
 
 static esp_http_client_handle_t _client = { 0 };
 
-t_track_list _track_list = { 0 };
 
 #define BUF_SIZE_REPEAT_MSG 64
 static struct _repeat_msg
 {
+    u8_t repeat_count;
     u8_t buf[BUF_SIZE_REPEAT_MSG];
     u16_t buf_len;
     u8_t pack_type;
 } repeat_msg;
 
-void polling_server(void);
-void send_syn(void);
-void send_statys(void);
-void repeat_send(void);
 
-void send_com_event(char* msg);
-void register_com_event(void);
-s32_t parse_responce(u8_t* buf, u16_t len);
-u16_t create_pack(t_csp_head* phead, void* pbody, u16_t body_len, u8_t* res_buf, u16_t res_buf_len);
-t_csp_head create_pack_head(u8_t e_msg_type, u16_t body_len);
-
-void print_binary(u8_t* buf, u16_t len);
 void set_req_url(u8_t pack_type);
 
 void ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len);
 void switch_playlist(t_csp_track_req* ptrack_req, u16_t len);
 void send_track_req(u16_t hash_track_name, u16_t pack_num);
 u16_t read_track_data(t_csp_track_pack* ptrack_pack);
-u8_t send_track_data_user(t_csp_track_pack* ptrack_pack);
 t_csp_track_list* read_tracklist(t_csp_track_list* ptracklist_hash);
 
-static u8_t device_id = 0;
-static u8_t http_status = E_HTTP_STATUS_IDEL;
-extern volatile QueueHandle_t QueueHttpSD;
+static u8_t _device_id = 0;
+static u8_t _http_status = E_HTTP_STATUS_IDEL;
 
+// HTTTP FUNC
 void task_http(void *task_param)
 {
     esp_http_client_config_t config = {
@@ -69,16 +56,14 @@ void task_http(void *task_param)
     };
     _client = esp_http_client_init_user(&config);
 
-    // register_com_event();
-
     u32_t task_delay = 1000 / portTICK_PERIOD_MS;
 
     while(1)
     {
-        if ( http_status == E_HTTP_STATUS_IDEL )
+        if ( _http_status == E_HTTP_STATUS_IDEL )
         {
             task_delay = 1000 / portTICK_PERIOD_MS;
-            if ( !device_id)
+            if ( !_device_id)
                 send_syn();
             else
                 send_statys();
@@ -88,7 +73,7 @@ void task_http(void *task_param)
         if (esp_http_client_poll_read_user(_client) > 0)
             read_response();
         
-        if ( http_status == E_HTTP_STATUS_WORK)
+        if ( _http_status == E_HTTP_STATUS_WORK)
             task_delay = 300 / portTICK_PERIOD_MS;
 
         vTaskDelay(task_delay);
@@ -96,95 +81,31 @@ void task_http(void *task_param)
 }
 
 
-void send_syn(void)
+u8_t http_get_device_id(void)
 {
-    u8_t pack_buf[ DEFAULT_PACK_LEN ] = { 0 };
-    t_csp_head head = create_pack_head(ECSP_CONNECT, sizeof(t_csp_connect));
-
-    t_csp_connect body = { UNIQUE_DEVICE_ID };
-    u16_t pack_len = create_pack(
-        &head, &body, sizeof(t_csp_connect), 
-        (u8_t*)&pack_buf, DEFAULT_PACK_LEN
-    );
-    if ( !pack_len )
-    {
-        printf("Cannot create pack buf to small\n");
-        return;
-    }
-    send_to_serv(pack_buf, pack_len, head.msg_type);
-}
-
-// statys is stub just some data
-void send_statys(void)
-{
-    u8_t pack_buf[ DEFAULT_PACK_LEN ] = { 0 };
-    t_csp_head head = create_pack_head(ECSP_STATUS, sizeof(t_csp_status));
-
-    t_csp_track_list tracklist_hash = { 0 };
-    read_tracklist(&tracklist_hash);
-    t_csp_status body = { 
-        .track_list_hash = {
-            .prev   = tracklist_hash.prev,
-            .current = tracklist_hash.current,
-            .next   = tracklist_hash.next,
-        },
-        .volume_lvl = 0,
-        .devices = { .count = 0 }
-    };
-
-    u16_t pack_len = create_pack(
-        &head, &body, sizeof(t_csp_status), 
-        (u8_t*)&pack_buf, DEFAULT_PACK_LEN
-    );
-
-    send_to_serv((u8_t*)&pack_buf, pack_len, head.msg_type);
+    return _device_id;
 }
 
 
-t_csp_track_list* read_tracklist(t_csp_track_list* ptracklist_hash)
+void http_set_status(u8_t status)
 {
-    ptracklist_hash->current = _track_list.current.hash_name;
-    ptracklist_hash->next = _track_list.next.hash_name;
-    ptracklist_hash->prev = _track_list.prev.hash_name;
-    return ptracklist_hash;
+    _http_status = status;
 }
 
 
-t_csp_head create_pack_head(u8_t msg_type, u16_t body_len)
+u8_t http_get_status(void)
 {
-    t_csp_head head = {
-        .id = device_id, 
-        .msg_type = msg_type, 
-        .body_len = body_len, 
-        .crc = 0
-    };
-    head.crc = crc8(0, &head, sizeof(t_csp_head) - 1);
-    return head;
+    return _http_status;
 }
 
 
-u16_t create_pack(
-    t_csp_head* phead, void* pbody, u16_t body_len, 
-    u8_t* res_buf, u16_t res_buf_len)
+void http_set_device_id(u8_t device_id)
 {
-    if ( !phead || !pbody || !res_buf )
-        return 0;
-    if ( sizeof(t_csp_head) + body_len + sizeof(u16_t) > res_buf_len )
-        return 0;
-
-    memcpy(res_buf, phead, sizeof(t_csp_head));
-    memcpy(res_buf + sizeof(t_csp_head), pbody, body_len);
-
-    u16_t crc16_pack = crc16(0, res_buf, body_len + sizeof(t_csp_head));
-    memcpy(
-        res_buf + sizeof(t_csp_head) + body_len, 
-        &crc16_pack, sizeof(u16_t)
-    );
-
-    return sizeof(t_csp_head) + body_len + sizeof(u16_t);
+    _device_id = device_id;
 }
 
 
+// HTTTP FUNC
 static int read_response(void)
 {
     static char buf[MAX_HTTP_OUTPUT_BUFFER] = { 0 };
@@ -203,205 +124,27 @@ static int read_response(void)
 }
 
 
-u8_t* integrity_check(u8_t* buf, u16_t len)
+// HTTP FUNC
+s8_t http_repeat_send(void)
 {
-    if (buf == NULL)
-        return NULL;
-
-    t_csp_head* phead = (t_csp_head*)buf;
-    
-    if (phead->crc != crc8(0, phead, sizeof(t_csp_head) - 1))
-        return NULL; // HEAD crc error
-
-    u16_t crc16_pack = *((u16_t*)(buf + len - 2));
-    if (crc16_pack != crc16(0, buf, len - 2))
-        return NULL; // pack crc error
-
-    // return pointer to the body
-    return buf + sizeof(t_csp_head);
-}
-
-
-void print_binary(u8_t* buf, u16_t len)
-{
-    for (u16_t i = 0; i < len; i++)
-    {
-        if (i % 10 == 0)
-            printf("\n");
-        printf("%02X ", buf[i]);
-    }
-    printf("\n");
-}
-
-s32_t parse_responce(u8_t* buf, u16_t len)
-{
-    if (buf == NULL)
+    if ( !repeat_msg.repeat_count )
         return -1;
-
-    static u8_t repeat_count = 0;
-    t_csp_head* phead = (t_csp_head*)buf;
     
-    u8_t* pbody = integrity_check(buf, len);
-
-    if (pbody == NULL)
-    {
-        printf("ERROR: crc\n");
-        if (repeat_count >= SEND_ATTEMPS_MAX)
-            return -2;
-
-        printf("WARNING: try repaet sending\n");
-        repeat_send();
-        repeat_count += 1;
-        return 0;
-    }
-    repeat_count = 0;
-    if (phead->id != device_id && device_id)
-    {
-        printf("Not to me\n");
-        return -3;
-    }
-    
-    switch (phead->msg_type)
-    {
-        case ECSP_CONNECT:
-        case ECSP_DISCONNECT:
-        case ECSP_STATUS:
-        case ECSP_TRACK_DATA:
-            printf("GET TRACK DATA\n");
-            read_track_data((t_csp_track_pack*)pbody);
-            send_track_data_user((t_csp_track_pack*)pbody);
-            http_status = E_HTTP_STATUS_WORK;
-
-            if (((t_csp_track_pack*)pbody)->pack_num == ((t_csp_track_pack*)pbody)->pack_total - 1)
-            {
-                // TODO: ASK NEXT TRACK
-                http_status = E_HTTP_STATUS_IDEL;
-                // req_next_track();
-                break;
-            }
-            send_track_req(
-                ((t_csp_track_pack*)pbody)->track_id,
-                ((t_csp_track_pack*)pbody)->pack_num + 1
-            );
-            break;
-        case ECSP_COM_PAUSE:
-        case ECSP_COM_RESUME:
-        case ECSP_COM_NEXT:
-        case ECSP_COM_PREV:
-        case ECSP_COM_REPEAT:
-        case ECSP_COM_VOL_INC:
-        case ECSP_COM_VOL_DEC:
-        case ECSP_COM_SWITCH_LIST:
-            printf("SWITCH PLAY LIST\n");
-            http_status = E_HTTP_STATUS_WORK;
-            switch_playlist((t_csp_track_req*)pbody, phead->body_len);
-            return phead->body_len;
-        case ECSP_COM_GET_TRACK:
-        case ECSP_ACK:
-            printf("ACK\n");
-            ack_proc(phead->id, (t_csp_ack*)pbody, phead->body_len);
-        break;
-
-        default:
-            return -3;
-    }
-
-    // send_statys();
-    return phead->body_len;
-}
-
-
-// void req_next_track(void)
-// {
-//     // next track is request with 0 hash and 0 len
-//     send_track_req(0, 0);
-// }
-
-
-u8_t send_track_data_user(t_csp_track_pack* ptrack_pack)
-{
-    const u8_t queue_send_timout = 5;
-    u8_t send_try_count = 0;
-    while (1)
-    {
-        if ( xQueueSend( QueueHttpSD, (void*)ptrack_pack, queue_send_timout ) == pdPASS )
-        {
-            printf("HTTP QUEUE: send successe\n");
-            printf("track_num = %d\n\n", ptrack_pack->track_id);
-            break;
-        }
-        send_try_count += 1;
-        if (send_try_count == 5)
-        {
-            printf("HTTP QUEUE: send FAILD\n");
-            return -1;
-        }
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-    }
+    repeat_msg.repeat_count -= 1;
+    http_send_to_serv(repeat_msg.buf, repeat_msg.buf_len, repeat_msg.pack_type);
     return 0;
 }
 
 
-u16_t read_track_data(t_csp_track_pack* ptrack_pack)
-{
-    printf("TRACK PACK TOATAL: %d ", ptrack_pack->pack_total);
-    printf("TRACK PACK NUMBER: %d\n\n", ptrack_pack->pack_num);
-    if (ptrack_pack->pack_num == ptrack_pack->pack_total - 1)
-        printf("CONGRATULATIONS\nCONGRATULATIONS\n");
-        
-    return ptrack_pack->pack_num + 1;
-}
-
-
-void switch_playlist(t_csp_track_req* ptrack_req, u16_t len)
-{
-    printf("track id = %04X\n", ptrack_req->track_id);
-    printf("amount packs = %04X\n", ptrack_req->amount_packs);
-    _track_list.current.hash_name = ptrack_req->track_id;
-    _track_list.current.statys = TRACK_ST_TRANSMITTED;
-    _track_list.current.size = (ptrack_req->amount_packs - 1) * MAX_TRACK_DATA;
-    
-    send_track_req(ptrack_req->track_id, 0);
-}
-
-
-void send_track_req(u16_t hash_track_name, u16_t pack_num)
-{
-    u8_t pack_buf[ DEFAULT_PACK_LEN ] = { 0 };
-    t_csp_head head = create_pack_head(ECSP_COM_GET_TRACK, sizeof(t_csp_status));
-    t_csp_track_req body = {
-        .track_id = hash_track_name,
-        .pack_num = pack_num
-    };
-
-    u16_t pack_len = create_pack(
-        &head, &body, sizeof(t_csp_track_req), 
-        (u8_t*)&pack_buf, DEFAULT_PACK_LEN
-    );
-
-    send_to_serv((u8_t*)&pack_buf, pack_len, head.msg_type);
-}
-
-void repeat_send(void)
-{
-    send_to_serv(repeat_msg.buf, repeat_msg.buf_len, repeat_msg.pack_type);
-}
-
-
-void ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len)
-{
-    if ( !device_id && pack_body->last_msg_type == ECSP_CONNECT)
-        device_id = dev_id_pack;
-}
-
-
-static void send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type)
+// HTTP FUNC
+void http_send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type)
 {
     if (buf_len < BUF_SIZE_REPEAT_MSG)
     {// copy mesage to repeat if transmition fail
         memcpy(repeat_msg.buf, buf, buf_len);
         repeat_msg.buf_len = buf_len;
         repeat_msg.pack_type = pack_type;
+        repeat_msg.repeat_count = SEND_ATTEMPS_MAX;
     }
     set_req_url(pack_type);
     esp_http_client_set_timeout_ms_user(_client, 500);
@@ -422,7 +165,7 @@ static void send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type)
         printf("ERROR: sending\n");
 }
 
-
+// HTTP FUNC
 void set_req_url(u8_t pack_type)
 {
     char link[MAX_LINK_LEN] = { 0 };
@@ -460,14 +203,14 @@ void set_req_url(u8_t pack_type)
     }
 }
 
-
+// HTTP FUNC
 static int send_get_req(void)
 {
     esp_http_client_set_method_user(_client, HTTP_METHOD_GET);
     return esp_http_client_open_user(_client, 0);
 }
 
-
+// HTTP FUNC
 static int send_post_req(u8_t* buf, u16_t buf_len)
 {
     esp_http_client_set_method_user(_client, HTTP_METHOD_POST);
@@ -480,34 +223,15 @@ static int send_post_req(u8_t* buf, u16_t buf_len)
 }
 
 
-void send_com_event(char* msg)
+// BULSHIT FUNC
+void print_binary(u8_t* buf, u16_t len)
 {
-    t_event_com_data event_data = { {0}, 0 };
-    if (strlen(msg) >= EVENT_MSG_SIZE_LIM)
-        event_data.size = EVENT_MSG_SIZE_LIM;
-    else
-        event_data.size = strlen(msg);
-    memcpy(event_data.str, msg, event_data.size);
-
-    esp_err_t err = esp_event_post_to(
-        event_com_get_handle(), EVENT_COM_BASE, E_EVENT_COM_PRINT, 
-        &event_data,  sizeof(event_data), 50 / portTICK_PERIOD_MS
-    );
-    if (err != ESP_OK) {
-        printf("Failed to post event to \"%s\" #%d: %d (%s)", EVENT_COM_BASE, EVENT_COM_ID, err, esp_err_to_name(err));
-    }
-}
-
-
-void register_com_event(void)
-{
-    for (uint8_t event_id = E_EVENT_COM_PRINT; event_id < E_EVENT_COM_WAIT; event_id++)
+    for (u16_t i = 0; i < len; i++)
     {
-        esp_err_t err =  esp_event_handler_register_with(
-            event_com_get_handle(), EVENT_COM_BASE, event_id, event_com, NULL
-        );
-        if (err != ESP_OK) {
-            printf("Failed to register event handler for %s #%d", EVENT_COM_BASE, event_id);
-        };
+        if (i % 10 == 0)
+            printf("\n");
+        printf("%02X ", buf[i]);
     }
+    printf("\n");
 }
+

@@ -23,15 +23,6 @@ extern volatile QueueHandle_t QueueHttpSD;
 
 static char file_name[MAX_FILE_NAME_LEN] = { 0 };
 
-// DBG
-// static const char write_buf[5][80] = {
-//     "The machines rose from the ashes of the nuclear fire.\n",
-//     "Their war to exterminate mankind had raged for decades,\n",
-//     "but the final battle would not be fought in the future.\n",
-//     "It would be fought here, in our present.\n",
-//     "Tonight\n\n"
-// };
-
 
 void task_sdcard(void* task_args)
 {
@@ -54,7 +45,6 @@ void task_sdcard(void* task_args)
         get_file_name(pqueue_data, file_name, MAX_FILE_NAME_LEN);
 
         status = sdcard_add_to_file(file_name, (u8_t*)pqueue_data->track, pqueue_data->track_len);
-        // status = sdcard_add_to_file("Terminator.txt", (u8_t*)&write_buf[count], strlen(write_buf[count]));
         if (status <= 0)
             printf("ERROR: SDCARD Can't transmit data count = %d status = %d\n", count, status);
         else

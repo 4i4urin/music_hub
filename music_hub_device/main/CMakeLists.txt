@@ -12,11 +12,16 @@ idf_component_register(
         "../tasks/task_test_com.c"
         "../tasks/task_sdcard.c"
 
+        "../modules/client_serv_com/cserver_com_receiver.c"
+        "../modules/client_serv_com/cserver_com_sender.c"
+
     INCLUDE_DIRS 
         "."
 
         "../modules/esp_http_client/include"
         "../modules/esp_http_client/lib/include"
+
+        "../modules/client_serv_com/include"
 
         "../tasks/include"
         "common_inc"

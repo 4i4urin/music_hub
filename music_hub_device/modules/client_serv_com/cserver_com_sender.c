@@ -1,4 +1,5 @@
 #include "cserver_com_sender.h"
+#include "cserver_com_receiver.h"
 #include "task_http.h"
 
 #include "client_serv_prot.h"
@@ -11,7 +12,7 @@ static u16_t _create_pack(t_csp_head* phead, void* pbody, u16_t body_len, u8_t* 
 // TODO: track list and other things should be in over module
 t_csp_track_list* read_tracklist(t_csp_track_list* ptracklist_hash);
 
-// SENDER FUNC
+
 void send_syn(void)
 {
     u8_t pack_buf[ DEFAULT_PACK_LEN ] = { 0 };
@@ -31,7 +32,6 @@ void send_syn(void)
 }
 
 
-// SENDER FUNC
 // statys is stub just some data
 void send_statys(void)
 {
@@ -39,7 +39,10 @@ void send_statys(void)
     t_csp_head head = _create_pack_head(ECSP_STATUS, sizeof(t_csp_status));
 
     t_csp_track_list tracklist_hash = { 0 };
-    read_tracklist(&tracklist_hash);
+    get_csp_track_list(&tracklist_hash);
+    printf("STATUS: curr = %04X next = %04X prev = %04X", 
+        tracklist_hash.current, tracklist_hash.next, tracklist_hash.prev);
+
     t_csp_status body = { 
         .track_list_hash = {
             .prev   = tracklist_hash.prev,
@@ -59,7 +62,6 @@ void send_statys(void)
 }
 
 
-// SENDER FUNC
 void send_track_req(u16_t hash_track_name, u16_t pack_num)
 {
     u8_t pack_buf[ DEFAULT_PACK_LEN ] = { 0 };
@@ -78,7 +80,6 @@ void send_track_req(u16_t hash_track_name, u16_t pack_num)
 }
 
 
-// SENDER FUNC
 static t_csp_head _create_pack_head(u8_t msg_type, u16_t body_len)
 {
     t_csp_head head = {
@@ -92,7 +93,6 @@ static t_csp_head _create_pack_head(u8_t msg_type, u16_t body_len)
 }
 
 
-// SENDER FUNC
 static u16_t _create_pack(
     t_csp_head* phead, void* pbody, u16_t body_len, 
     u8_t* res_buf, u16_t res_buf_len)
@@ -112,15 +112,5 @@ static u16_t _create_pack(
     );
 
     return sizeof(t_csp_head) + body_len + sizeof(u16_t);
-}
-
-
-// BULSHIT FUNC
-t_csp_track_list* read_tracklist(t_csp_track_list* ptracklist_hash)
-{
-    // ptracklist_hash->current = _track_list.current.hash_name;
-    // ptracklist_hash->next = _track_list.next.hash_name;
-    // ptracklist_hash->prev = _track_list.prev.hash_name;
-    return ptracklist_hash;
 }
 

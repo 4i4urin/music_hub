@@ -22,7 +22,6 @@ static t_track_list _track_list = { 0 };
 extern volatile QueueHandle_t QueueHttpSD;
 
 
-// RECIVER FUNC
 s32_t parse_responce(u8_t* buf, u16_t len)
 {
     if (buf == NULL)
@@ -61,9 +60,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 
             if (((t_csp_track_pack*)pbody)->pack_num == ((t_csp_track_pack*)pbody)->pack_total - 1)
             {
-                // TODO: ASK NEXT TRACK
                 http_set_status(E_HTTP_STATUS_IDEL);
-                // req_next_track();
                 break;
             }
             send_track_req(
@@ -83,7 +80,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
             printf("SWITCH PLAY LIST\n");
             http_set_status(E_HTTP_STATUS_WORK);
             _switch_playlist((t_csp_track_req*)pbody, phead->body_len);
-            return phead->body_len;
+            break;
 
         case ECSP_COM_GET_TRACK:
         case ECSP_ACK:
@@ -99,7 +96,6 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 }
 
 
-// RECIVER FUNC
 static u8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
 {
     const u8_t queue_send_timout = 5;
@@ -123,7 +119,7 @@ static u8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
     return 0;
 }
 
-// RECIVER FUNC
+
 static u16_t _read_track_data(t_csp_track_pack* ptrack_pack)
 {
     printf("TRACK PACK TOATAL: %d ", ptrack_pack->pack_total);
@@ -134,20 +130,30 @@ static u16_t _read_track_data(t_csp_track_pack* ptrack_pack)
     return ptrack_pack->pack_num + 1;
 }
 
-// RECIVER FUNC
+
 static void _switch_playlist(t_csp_track_req* ptrack_req, u16_t len)
 {
-    printf("track id = %04X\n", ptrack_req->track_id);
+    printf("track pos = %d track id = %04X\n", ptrack_req->track_pos, ptrack_req->track_id);
     printf("amount packs = %04X\n", ptrack_req->amount_packs);
-    _track_list.current.hash_name = ptrack_req->track_id;
-    _track_list.current.statys = TRACK_ST_TRANSMITTED;
-    _track_list.current.size = (ptrack_req->amount_packs - 1) * MAX_TRACK_DATA;
+
+    t_track* p_track = NULL;
+    switch (ptrack_req->track_pos)
+    {
+        case ECSP_TRACK_POS_PREV: p_track = &_track_list.prev;      break;
+        case ECSP_TRACK_POS_CURR: p_track = &_track_list.current;   break;
+        case ECSP_TRACK_POS_NEXT: p_track = &_track_list.next;      break;
+        default:
+            p_track = &_track_list.next;
+    }
+
+    p_track->hash_name = ptrack_req->track_id;
+    p_track->statys = TRACK_ST_TRANSMITTED;
+    p_track->size = (ptrack_req->amount_packs - 1) * MAX_TRACK_DATA;
     
     send_track_req(ptrack_req->track_id, 0);
 }
 
 
-// RECIVER FUNC
 static void _ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len)
 {
     if ( !http_get_device_id() && pack_body->last_msg_type == ECSP_CONNECT)
@@ -155,7 +161,6 @@ static void _ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len)
 }
 
 
-// RECIVER FUNC
 static u8_t* _integrity_check(u8_t* buf, u16_t len)
 {
     if (buf == NULL)
@@ -172,4 +177,13 @@ static u8_t* _integrity_check(u8_t* buf, u16_t len)
 
     // return pointer to the body
     return buf + sizeof(t_csp_head);
+}
+
+// t_csp_track_list content only hash names
+t_csp_track_list* get_csp_track_list(t_csp_track_list* p_tracklist)
+{
+    p_tracklist->prev = _track_list.prev.hash_name;
+    p_tracklist->current = _track_list.current.hash_name;
+    p_tracklist->next = _track_list.next.hash_name;
+    return p_tracklist;
 }

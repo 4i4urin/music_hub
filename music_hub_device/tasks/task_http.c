@@ -1,12 +1,10 @@
 #include "task_http.h"
 
-
 #include "esp_http_client_user.h"
 
 #include "base_types.h"
 
 #include "client_serv_prot.h"
-// #include "status.h"
 #include "private.h"
 
 #include "cserver_com_sender.h"
@@ -17,11 +15,11 @@
 
 #define SEND_ATTEMPS_MAX 5
 
+
 static int read_response(void);
-
-
 static int send_get_req(void);
 static int send_post_req(u8_t* buf, u16_t buf_len);
+static void set_req_url(u8_t pack_type);
 
 static esp_http_client_handle_t _client = { 0 };
 
@@ -35,19 +33,10 @@ static struct _repeat_msg
     u8_t pack_type;
 } repeat_msg;
 
-
-void set_req_url(u8_t pack_type);
-
-void ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len);
-void switch_playlist(t_csp_track_req* ptrack_req, u16_t len);
-void send_track_req(u16_t hash_track_name, u16_t pack_num);
-u16_t read_track_data(t_csp_track_pack* ptrack_pack);
-t_csp_track_list* read_tracklist(t_csp_track_list* ptracklist_hash);
-
 static u8_t _device_id = 0;
 static u8_t _http_status = E_HTTP_STATUS_IDEL;
 
-// HTTTP FUNC
+
 void task_http(void *task_param)
 {
     esp_http_client_config_t config = {
@@ -105,7 +94,6 @@ void http_set_device_id(u8_t device_id)
 }
 
 
-// HTTTP FUNC
 static int read_response(void)
 {
     static char buf[MAX_HTTP_OUTPUT_BUFFER] = { 0 };
@@ -124,9 +112,9 @@ static int read_response(void)
 }
 
 
-// HTTP FUNC
 s8_t http_repeat_send(void)
 {
+    vTaskDelay(5 / portTICK_PERIOD_MS);
     if ( !repeat_msg.repeat_count )
         return -1;
     
@@ -136,7 +124,6 @@ s8_t http_repeat_send(void)
 }
 
 
-// HTTP FUNC
 void http_send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type)
 {
     if (buf_len < BUF_SIZE_REPEAT_MSG)
@@ -166,7 +153,7 @@ void http_send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type)
 }
 
 // HTTP FUNC
-void set_req_url(u8_t pack_type)
+static void set_req_url(u8_t pack_type)
 {
     char link[MAX_LINK_LEN] = { 0 };
     strcpy(link, SERVER_ADDRES);
@@ -203,14 +190,14 @@ void set_req_url(u8_t pack_type)
     }
 }
 
-// HTTP FUNC
+
 static int send_get_req(void)
 {
     esp_http_client_set_method_user(_client, HTTP_METHOD_GET);
     return esp_http_client_open_user(_client, 0);
 }
 
-// HTTP FUNC
+
 static int send_post_req(u8_t* buf, u16_t buf_len)
 {
     esp_http_client_set_method_user(_client, HTTP_METHOD_POST);
@@ -223,7 +210,6 @@ static int send_post_req(u8_t* buf, u16_t buf_len)
 }
 
 
-// BULSHIT FUNC
 void print_binary(u8_t* buf, u16_t len)
 {
     for (u16_t i = 0; i < len; i++)

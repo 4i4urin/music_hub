@@ -110,14 +110,19 @@ typedef struct _t_csp_track_pack
 } t_csp_track_pack;
 
 
-// ECSP_COM_GET_TRACK
+// track_pos
+#define ECSP_TRACK_POS_PREV 0
+#define ECSP_TRACK_POS_CURR 1
+#define ECSP_TRACK_POS_NEXT 2
+// ECSP_COM_GET_TRACK, ECSP_COM_SWITCH_LIST
 typedef struct _t_csp_track_req
 {
     u16_t track_id;
     union {
         u16_t pack_num;
         u16_t amount_packs;
-    };    
+    };
+    u8_t track_pos;
 } t_csp_track_req;
 
 

@@ -91,20 +91,21 @@ def build_track_pack(dev_id: int, track: Track, pack_num: int) -> bytes:
 
 
 
-def switch_playlist(dev_id: int) -> bytes:
+def switch_playlist(dev_id: int, track_pos: int) -> bytes:
     head: HeadCsp = HeadCsp.build(dev_id, TypesCsp.ECSP_COM_SWITCH_LIST, 4)
-    body: bytearray = bytearray(track_list[0].hash_name.to_bytes(2, "little"))
+    body: bytearray = bytearray(track_list[track_pos].hash_name.to_bytes(2, "little"))
 
-    if track_list[0].file_size // MAX_TRACK_DATA_PACK + 1 > U16_T_MAX:
+    if track_list[track_pos].file_size // MAX_TRACK_DATA_PACK + 1 > U16_T_MAX:
         print("Too big file")
         return bytes(ERROR)
 
-    if track_list[0].file_size % MAX_TRACK_DATA_PACK != 0:
-        amount_packs: int = track_list[0].file_size // MAX_TRACK_DATA_PACK + 1
+    if track_list[track_pos].file_size % MAX_TRACK_DATA_PACK != 0:
+        amount_packs: int = track_list[track_pos].file_size // MAX_TRACK_DATA_PACK + 1
     else:
-        amount_packs: int = track_list[0].file_size // MAX_TRACK_DATA_PACK
+        amount_packs: int = track_list[track_pos].file_size // MAX_TRACK_DATA_PACK
 
     body += bytearray(amount_packs.to_bytes(2, "little"))
+    body += bytearray(track_pos.to_bytes(1, "little"))
     pack: Package = Package.build(head, body)
 
     print(pack.full_pack.hex(":"))
@@ -159,9 +160,16 @@ def dev_statys():
     print("STATYS PACK")
 
     devices[0].read_statys(package.body)
+    # TODO: define current, next and prev positions
     if devices[0].track_list.hash_current == 0:
-        print("SWITCH PLAY LIST")
-        return bytes(switch_playlist(devices[0].id))
+        print("SWITCH PLAY LIST CURRENT")
+        return bytes(switch_playlist(devices[0].id, 1))
+    elif devices[0].track_list.hash_next == 0:
+        print("SWITCH PLAY LIST NEXT")
+        return bytes(switch_playlist(devices[0].id, 2))
+    elif devices[0].track_list.hash_prev == 0:
+        print("SWITCH PLAY LIST PREV")
+        return bytes(switch_playlist(devices[0].id, 0))
 
     return bytes(build_resp_ack(devices[0].id, package.head.type))
 
@@ -186,10 +194,6 @@ def track_transmission():
     track: Track = track_list[tracklist_index]
     if track_pack_num == 0:
         track.file_by_packs = parce_music_file(track.path)
-
-    # DBG
-    if track_pack_num == 175:
-        print(bytearray(track.file_by_packs[175]).hex(":"))
 
     return bytes(build_track_pack(devices[0].id, track, track_pack_num))
 

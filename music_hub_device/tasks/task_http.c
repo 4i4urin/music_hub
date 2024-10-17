@@ -63,7 +63,7 @@ void task_http(void *task_param)
             read_response();
         
         if ( _http_status == E_HTTP_STATUS_WORK)
-            task_delay = 300 / portTICK_PERIOD_MS;
+            task_delay = 10 / portTICK_PERIOD_MS;
 
         vTaskDelay(task_delay);
     }
@@ -99,7 +99,6 @@ static int read_response(void)
     static char buf[MAX_HTTP_OUTPUT_BUFFER] = { 0 };
     
     esp_http_client_set_timeout_ms_user(_client, 200);
-    printf("try to read\n");
     esp_http_client_fetch_headers_user(_client);
     int content_length = esp_http_client_read_user_response_user(_client, buf, MAX_HTTP_OUTPUT_BUFFER);
     // int content_length = esp_http_client_read(_client, buf, MAX_HTTP_OUTPUT_BUFFER);

@@ -1,6 +1,7 @@
 #include "cserver_com_receiver.h"
 #include "cserver_com_sender.h"
 #include "task_http.h"
+#include "task_bt_dev.h"
 
 #include "client_serv_prot.h"
 #include "private.h"
@@ -13,13 +14,14 @@
 
 static u8_t _send_track_data_user(t_csp_track_pack* ptrack_pack);
 static u16_t _read_track_data(t_csp_track_pack* ptrack_pack);
-static void _switch_playlist(t_csp_track_req* ptrack_req, u16_t len);
+static s8_t _switch_playlist(t_csp_track_req* ptrack_req, u16_t len);
 static void _ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len);
 static u8_t* _integrity_check(u8_t* buf, u16_t len);
+static u8_t _queue_check_bt_connect(void);
 
 // TODO: move to anover module
 static t_track_list _track_list = { 0 };
-extern volatile QueueHandle_t QueueHttpSD;
+extern volatile QueueHandle_t QueueHttpBtdev;
 
 
 s32_t parse_responce(u8_t* buf, u16_t len)
@@ -78,8 +80,10 @@ s32_t parse_responce(u8_t* buf, u16_t len)
         case ECSP_COM_VOL_DEC:
         case ECSP_COM_SWITCH_LIST:
             printf("SWITCH PLAY LIST\n");
-            http_set_status(E_HTTP_STATUS_WORK);
-            _switch_playlist((t_csp_track_req*)pbody, phead->body_len);
+            if (_switch_playlist((t_csp_track_req*)pbody, phead->body_len) < 0)
+                http_set_status(E_HTTP_STATUS_IDEL);
+            else
+                http_set_status(E_HTTP_STATUS_WORK);
             break;
 
         case ECSP_COM_GET_TRACK:
@@ -102,7 +106,7 @@ static u8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
     u8_t send_try_count = 0;
     while (1)
     {
-        if ( xQueueSend( QueueHttpSD, (void*)ptrack_pack, queue_send_timout ) == pdPASS )
+        if ( xQueueSend( QueueHttpBtdev, (void*)ptrack_pack, queue_send_timout ) == pdPASS )
         {
             printf("HTTP QUEUE: send successe\n");
             printf("track_num = %d\n\n", ptrack_pack->track_id);
@@ -131,7 +135,7 @@ static u16_t _read_track_data(t_csp_track_pack* ptrack_pack)
 }
 
 
-static void _switch_playlist(t_csp_track_req* ptrack_req, u16_t len)
+static s8_t _switch_playlist(t_csp_track_req* ptrack_req, u16_t len)
 {
     printf("track pos = %d track id = %04X\n", ptrack_req->track_pos, ptrack_req->track_id);
     printf("amount packs = %04X\n", ptrack_req->amount_packs);
@@ -150,9 +154,37 @@ static void _switch_playlist(t_csp_track_req* ptrack_req, u16_t len)
     p_track->statys = TRACK_ST_TRANSMITTED;
     p_track->size = (ptrack_req->amount_packs - 1) * MAX_TRACK_DATA;
     
-    send_track_req(ptrack_req->track_id, 0);
+    // if (_queue_check_bt_connect())
+    // {
+        send_track_req(ptrack_req->track_id, 0);
+        return 0;
+    // } else
+    //     return -1;        
 }
 
+
+static u8_t _queue_check_bt_connect(void)
+{
+    const u8_t queue_recive_timout = 10;
+
+    static u8_t _is_connect = 0;
+    if (_is_connect)
+        return _is_connect;
+
+    u32_t bt_connect_flag = 0;
+    portBASE_TYPE xStatus = xQueueReceive( QueueHttpBtdev, &bt_connect_flag, queue_recive_timout );
+    if ( xStatus == pdPASS && bt_connect_flag == QUEUE_BT_CONNECTED)
+    {
+        _is_connect = 1;
+        printf("[HTTP] Device was connected\n");
+        return _is_connect;
+    }
+    else
+    {
+        printf("[HTTP] Device didn't connect\n");
+        return 0;
+    }
+}
 
 static void _ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len)
 {

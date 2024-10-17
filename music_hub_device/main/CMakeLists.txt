@@ -11,6 +11,7 @@ idf_component_register(
         "../tasks/task_http.c"
         "../tasks/task_test_com.c"
         "../tasks/task_sdcard.c"
+        "../tasks/task_bt_dev.c"
 
         "../modules/client_serv_com/cserver_com_receiver.c"
         "../modules/client_serv_com/cserver_com_sender.c"
@@ -32,6 +33,8 @@ idf_component_register(
         "tcp_transport"
         "nghttp"
         "esp_peripherals"
+        "bt"
+        "bluetooth_service"
 )
 
 

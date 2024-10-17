@@ -17,9 +17,8 @@ static esp_periph_set_handle_t init_sdcard(void);
 static t_csp_track_pack* sdcard_read_queue(t_csp_track_pack* track_data);
 static u8_t get_file_name(t_csp_track_pack* ptrack_data, char* file_name, u8_t max_file_name_len);
 
-
 static t_csp_track_pack queue_data;
-extern volatile QueueHandle_t QueueHttpSD;
+// extern volatile QueueHandle_t QueueHttpSD;
 
 static char file_name[MAX_FILE_NAME_LEN] = { 0 };
 
@@ -110,7 +109,10 @@ static u8_t hexu16_to_string(u16_t hex_num, char* str, u8_t max_str_len)
 static t_csp_track_pack* sdcard_read_queue(t_csp_track_pack* ptrack_data)
 {
     const u8_t queue_recive_timout = 10;
-    portBASE_TYPE xStatus = xQueueReceive( QueueHttpSD, ptrack_data, queue_recive_timout );
+    // portBASE_TYPE xStatus = xQueueReceive( QueueHttpSD, ptrack_data, queue_recive_timout );
+    // TODO: rework this function
+    // DBG
+    portBASE_TYPE xStatus = pdFAIL;
     if ( xStatus == pdPASS )
     {
         return ptrack_data;

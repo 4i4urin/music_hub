@@ -29,7 +29,7 @@
 #define MP3_OUTPUT_RB_SIZE (2 * 1024)
 
 
-static u8_t buf[SEND_SIZE] = { 0 };
+// static u8_t buf[SEND_SIZE] = { 0 };
 
 typedef u8_t esp_peer_bdname_t[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
 static esp_peer_bdname_t remote_bt_device_name;
@@ -51,10 +51,9 @@ audio_pipeline_handle_t init_pipeline(
     audio_element_handle_t bt_stream_writer, 
     audio_element_handle_t mp3_decoder);
 
-s32_t open_music_file(void);
-s32_t read_file(s32_t file, u8_t* buf, s32_t len);
-u32_t send_to_bluetooth_pipline(
-    audio_element_handle_t raw_reader, u8_t* buf, u32_t buf_len);
+u16_t send_to_bluetooth_pipline(
+    audio_element_handle_t raw_reader, u8_t* buf, u16_t buf_len);
+static t_csp_track_pack* btdev_read_queue(t_csp_track_pack* ptrack_data);
 
 // #define WAV
 
@@ -65,11 +64,8 @@ audio_element_handle_t init_wav_decoder(void);
 
 void task_bt_dev(void *task_param)
 {
-    esp_periph_set_handle_t set = init_sdcard();
-
-    printf("[ 2 ] Start codec chip\n");
-    audio_board_handle_t board_handle = audio_board_init();
-    audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_DECODE, AUDIO_HAL_CTRL_START);
+    esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
+    esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
 
 #ifdef WAV
     printf("Use WAV\n");
@@ -94,132 +90,68 @@ void task_bt_dev(void *task_param)
     
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
-    s32_t file = open_music_file();
-    s32_t state = 1;
+    t_csp_track_pack* pqueue_data = NULL;
+    u16_t pack_size = 0, written_bytes = 0;
+    u16_t send_size = SEND_SIZE;
     while (1)
     {
-        
-        if (!device_connect || state == 0)
+        if (!device_connect)
         {
             vTaskDelay(1000 / portTICK_PERIOD_MS);
             continue;
         }
 
-        // pqueue_data = btdev_read_queue(&queue_data);
-        // if (pqueue_data == NULL)
-        // {
-        //     vTaskDelay(10 / portTICK_PERIOD_MS);
-        //     continue; // ????? DO NOT KNOW WHAT TO DO
-        // }
-        // pack_size = pqueue_data->track_len;
-        // while (pack_size)
-        // {
-        //     send_size = (pack_size > send_size) ? SEND_SIZE : pack_size;
-
-        //     written_bytes = send_to_mp3pipline(
-        //         mp3_decoder, 
-        //         (char*)&(pqueue_data->track) + pqueue_data->track_len - pack_size, 
-        //         send_size);
-
-        //     if (send_size != (u16_t)written_bytes)
-        //         printf("WARNING: [BT_DEV] lose some bytes\n");
-            
-        //     pack_size -= (u16_t)written_bytes;
-        //     printf("Send size = %d pack size = %d\n", send_size, pack_size);
-        //     vTaskDelay(20 / portTICK_PERIOD_MS);
-        // }
-        if (file > 0)
-            state = read_file(file, buf, SEND_SIZE);
-        else
+        pqueue_data = btdev_read_queue(&queue_data);
+        if (pqueue_data == NULL)
         {
-            printf("ERROR: file designator is bad\n");
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
+            vTaskDelay(100 / portTICK_PERIOD_MS);
             continue;
         }
+        pack_size = pqueue_data->track_len;
+        while (pack_size)
+        {
+            send_size = (pack_size > send_size) ? SEND_SIZE : pack_size;
 
-        send_to_bluetooth_pipline(raw_reader, buf, SEND_SIZE);
-        vTaskDelay(25 / portTICK_PERIOD_MS);
+            written_bytes = send_to_bluetooth_pipline(
+                raw_reader, 
+                &(pqueue_data->track[0]) + pqueue_data->track_len - pack_size, 
+                send_size);
+
+            if (send_size != (u16_t)written_bytes)
+                printf("WARNING: [BT_DEV] lose some bytes\n");
+            
+            pack_size -= (u16_t)written_bytes;
+            vTaskDelay(25 / portTICK_PERIOD_MS);
+        }
     }
-    close(file);
+
 }
 
+
+static t_csp_track_pack* btdev_read_queue(t_csp_track_pack* ptrack_data)
+{
+    const u8_t queue_recive_timout = 10;
+    portBASE_TYPE xStatus = xQueueReceive( QueueHttpBtdev, ptrack_data, queue_recive_timout );
+
+    if ( xStatus == pdPASS )
+        return ptrack_data;
+    else
+        return NULL;
+}
 
 //--------------------------------------------------------------------------------------
 // service stuf
 
-
-u32_t send_to_bluetooth_pipline(
+u16_t send_to_bluetooth_pipline(
     audio_element_handle_t raw_reader,
-    u8_t* buf, u32_t buf_len)
+    u8_t* buf, u16_t buf_len)
 {
-
     s32_t res = raw_stream_write(raw_reader, (char*)buf, buf_len);
     if (res < 0)
-    {
         printf("Something whent wrong\n");
-        return res;
-    }
-    
+
     return res;
 }
-
-
-#define FILE_NUM 3
-s32_t open_music_file(void)
-{
-    printf("Try to open music files\n");
-
-#ifdef WAV
-    const char path[FILE_NUM][25] = {
-        "/sdcard/rap_music.wav",
-        "/sdcard/Punisher.wav",
-        "/sdcard/some_song.wav",
-    };
-#else
-    const char path[FILE_NUM][25] = {
-        "/sdcard/chill_music.mp3",
-        "/sdcard/rap_music.mp3",
-        "/sdcard/Punisher.mp3",
-    };
-#endif
-    printf("Try read\n");
-    s32_t file = 0;
-    for (s32_t i = 0; i < FILE_NUM; i++)
-    {
-        file = open(path[i], O_RDONLY);
-        if (file == -1)
-        {
-            printf("Failed to open. File name: %s\n", path[i]);
-        } else
-        {
-            printf("Open file: %s\n", path[i]);
-            break;
-        }
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-            
-    }
-
-    if (file == -1)
-    {
-        printf("ERROR: AAAAAAA\n");
-        return -1;
-    }
-    return file;
-}
-#undef FILE_NUM
-
-
-s32_t read_file(s32_t file, u8_t* buf, s32_t len)
-{
-    s32_t res = read(file, buf, len);
-    if (res < 0)
-    {
-        printf("Failed to read\n");
-        return -2;
-    }
-    return res;
-}
-
 
 //--------------------------------------------------------------------------------------
 // init

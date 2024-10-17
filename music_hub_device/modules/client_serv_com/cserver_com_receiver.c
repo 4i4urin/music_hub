@@ -113,12 +113,12 @@ static u8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
             break;
         }
         send_try_count += 1;
-        if (send_try_count == 5)
+        if (send_try_count => 5)
         {
             printf("HTTP QUEUE: send FAILD\n");
             return -1;
         }
-        vTaskDelay(50 / portTICK_PERIOD_MS);
+        vTaskDelay(1 / portTICK_PERIOD_MS);
     }
     return 0;
 }

@@ -6,6 +6,7 @@
 #define E_HTTP_STATUS_NULL ((u8_t)0xA0)
 #define E_HTTP_STATUS_IDEL ((u8_t)0xA1)
 #define E_HTTP_STATUS_WORK ((u8_t)0xA2)
+#define E_HTTP_STATUS_WAIT_RESP ((u8_t)0xC0)
 
 
 void task_http(void *task_param);

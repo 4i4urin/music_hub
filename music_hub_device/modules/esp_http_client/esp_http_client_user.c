@@ -1392,6 +1392,7 @@ static esp_err_t esp_http_client_request_send_user(esp_http_client_handle_t clie
             if (wret <= 0) {
                 ESP_LOGE(TAG, "Error write request");
                 esp_http_client_close_user(client);
+                printf("SHISHEL: write request\n");
                 return ESP_ERR_HTTP_WRITE_DATA;
             }
             client->data_write_left -= wret;

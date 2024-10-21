@@ -6,12 +6,19 @@
 #include "private.h"
 #include "crc.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+
 
 static t_csp_head _create_pack_head(u8_t e_msg_type, u16_t body_len);
 static u16_t _create_pack(t_csp_head* phead, void* pbody, u16_t body_len, u8_t* res_buf, u16_t res_buf_len);
+static t_csp_connect_dev* _buid_devices_pack(t_csp_connect_dev* p_con_dev);
 // TODO: track list and other things should be in over module
 t_csp_track_list* read_tracklist(t_csp_track_list* ptracklist_hash);
 
+
+extern volatile QueueHandle_t QueueHttpBtStatus;
+static t_csp_connect_dev _speakers = { 0 };
 
 void send_syn(void)
 {
@@ -40,7 +47,7 @@ void send_statys(void)
 
     t_csp_track_list tracklist_hash = { 0 };
     get_csp_track_list(&tracklist_hash);
-    printf("STATUS: curr = %04X next = %04X prev = %04X", 
+    printf("STATUS: curr = %04X next = %04X prev = %04X\n", 
         tracklist_hash.current, tracklist_hash.next, tracklist_hash.prev);
 
     t_csp_status body = { 
@@ -50,8 +57,11 @@ void send_statys(void)
             .next   = tracklist_hash.next,
         },
         .volume_lvl = 0,
-        .devices = { .count = 0 }
+        .devices = { 0 }
     };
+    _buid_devices_pack(&_speakers);
+    body.devices = _speakers;
+    printf("Device = %d\n", body.devices.count);
 
     u16_t pack_len = _create_pack(
         &head, &body, sizeof(t_csp_status), 
@@ -114,3 +124,26 @@ static u16_t _create_pack(
     return sizeof(t_csp_head) + body_len + sizeof(u16_t);
 }
 
+
+static t_csp_connect_dev* _buid_devices_pack(t_csp_connect_dev* p_con_dev)
+{
+    if (!uxQueueMessagesWaiting(QueueHttpBtStatus))
+        return p_con_dev;
+
+    const u8_t queue_recive_timout = 10;
+    u8_t bt_connect = 0;
+
+    portBASE_TYPE xStatus = xQueueReceive( QueueHttpBtStatus, &bt_connect, queue_recive_timout );
+
+    if ( xStatus != pdPASS )
+    {
+        printf("HTTP QUEUE: can't read status queue\n");
+        p_con_dev->count = 0;
+        p_con_dev->blth_status = p_con_dev->analog_status = p_con_dev->usb_status = 0;
+        return p_con_dev;
+    }
+    printf("HTTP QUEUE: read status queue bt_connect = %d\n", bt_connect);
+    p_con_dev->count = bt_connect;
+    p_con_dev->blth_status = 1;
+    return p_con_dev;
+}

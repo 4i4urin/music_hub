@@ -16,6 +16,7 @@
 
 
 volatile QueueHandle_t QueueHttpBtdev;
+volatile QueueHandle_t QueueHttpBtStatus;
 
 
 void wifi_connect(void *task_param);
@@ -30,6 +31,7 @@ void app_main(void)
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     QueueHttpBtdev = xQueueCreate(1, sizeof(t_csp_track_pack));
+    QueueHttpBtStatus = xQueueCreate(1, sizeof(u8_t));
     xTaskCreate(task_http, "TASK_HTTP", 1 << 15, NULL, 2, NULL);
     // xTaskCreate(task_sdcard, "TASK_SDCARD", 1 << 14, NULL, 2, NULL);
 
@@ -69,13 +71,11 @@ static void wifi_event_handler(void* event_handler_arg, esp_event_base_t event_b
 
 void wifi_connect(void *task_param)
 {
-    printf("kek\n");
     esp_netif_init();
     esp_event_loop_create_default();
     esp_netif_create_default_wifi_sta();
     wifi_init_config_t wifi_init_conf = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&wifi_init_conf);
-    printf("kek\n");
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event_handler, NULL);
     wifi_config_t wifi_conf = {
@@ -92,7 +92,7 @@ void wifi_connect(void *task_param)
     printf("connect key = %s", esp_err_to_name(err_key));
     while (1)
     {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }
 

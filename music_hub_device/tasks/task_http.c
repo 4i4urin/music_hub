@@ -13,7 +13,11 @@
 
 #define MAX_HTTP_OUTPUT_BUFFER 25596
 
-#define SEND_ATTEMPS_MAX 5
+#define SEND_ATTEMPS_MAX 1
+
+
+#define WAIT_RESP_COUNT_MAX     50
+#define WAIT_RESP_TIME_GAP      (100 / portTICK_PERIOD_MS)
 
 
 static int read_response(void);
@@ -34,7 +38,8 @@ static struct _repeat_msg
 } repeat_msg;
 
 static u8_t _device_id = 0;
-static u8_t _http_status = E_HTTP_STATUS_IDEL;
+static volatile u8_t _http_status = E_HTTP_STATUS_IDEL;
+static u8_t client_is_open = 0;
 
 
 void task_http(void *task_param)
@@ -46,26 +51,59 @@ void task_http(void *task_param)
     _client = esp_http_client_init_user(&config);
 
     u32_t task_delay = 1000 / portTICK_PERIOD_MS;
-
+    s32_t read_res = -1;
     while(1)
     {
         if ( _http_status == E_HTTP_STATUS_IDEL )
         {
-            task_delay = 1000 / portTICK_PERIOD_MS;
+            task_delay = 1 / portTICK_PERIOD_MS;
+            _http_status = E_HTTP_STATUS_WORK;
+            read_res = -1;
+            printf("WRITE\n");
             if ( !_device_id)
                 send_syn();
             else
                 send_statys();
+        } else if (_http_status == E_HTTP_STATUS_WORK)
+        {
+            printf("READ\n");
+            esp_http_client_set_timeout_ms_user(_client, 1);
+            if (esp_http_client_poll_read_user(_client) > 0)
+            {
+                read_res = read_response();
+                if (read_res > 0)
+                    _http_status = E_HTTP_STATUS_IDEL;
+                else
+                    _http_status = http_repeat_send() < 0 ? E_HTTP_STATUS_IDEL : E_HTTP_STATUS_WORK;
+                // DBG: remove sending from reading response
+                if (repeat_msg.pack_type == ECSP_COM_GET_TRACK)
+                {
+                    _http_status = E_HTTP_STATUS_WORK;
+                    printf("GET TRACK\n");
+                }
+                    
+            }
+            
+            task_delay = WAIT_RESP_TIME_GAP;
+        } else
+        {
+            printf("HTTP SHISHEL ERROR\n");
+            task_delay = 1000 / portTICK_PERIOD_MS;
         }
-        
-        esp_http_client_set_timeout_ms_user(_client, 1);
-        if (esp_http_client_poll_read_user(_client) > 0)
-            read_response();
-        
-        if ( _http_status == E_HTTP_STATUS_WORK)
-            task_delay = 10 / portTICK_PERIOD_MS;
-
-        vTaskDelay(task_delay);
+        // vTaskDelay(task_delay);
+        vTaskDelay(WAIT_RESP_TIME_GAP);
+        // if ( _http_status == E_HTTP_STATUS_IDEL )
+        // {
+        //     task_delay = 1000 / portTICK_PERIOD_MS;
+        //     if ( !_device_id)
+        //         send_syn();
+        //     else
+        //         send_statys();
+        // } else if (_http_status == E_HTTP_STATUS_WAIT_RESP || _http_status == E_HTTP_STATUS_WORK)
+        // {
+        //     
+        // }
+        // vTaskDelay(task_delay);
     }
 }
 
@@ -93,7 +131,11 @@ void http_set_device_id(u8_t device_id)
     _device_id = device_id;
 }
 
-
+/*
+if content_length == 0 -> E (23575) HTTP_CLIENT: transport_read: error - 0 
+should close connection and repeat sending 
+HTTP_TRANSPORT_ERROR
+*/
 static int read_response(void)
 {
     static char buf[MAX_HTTP_OUTPUT_BUFFER] = { 0 };
@@ -101,13 +143,16 @@ static int read_response(void)
     esp_http_client_set_timeout_ms_user(_client, 200);
     esp_http_client_fetch_headers_user(_client);
     int content_length = esp_http_client_read_user_response_user(_client, buf, MAX_HTTP_OUTPUT_BUFFER);
-    // int content_length = esp_http_client_read(_client, buf, MAX_HTTP_OUTPUT_BUFFER);
     esp_http_client_close_user(_client);
-
+    client_is_open = 0;
+    printf("content_length = %d HTTP: CLOSE USER\n", content_length);
+    // int content_length = esp_http_client_read(_client, buf, MAX_HTTP_OUTPUT_BUFFER);
+    
     s32_t parse_res = parse_responce((u8_t*)buf, content_length);
     if ( parse_res < 0) 
         printf("ERROR: Cannot parse\n");
-    return 0;
+        
+    return parse_res;
 }
 
 
@@ -116,7 +161,7 @@ s8_t http_repeat_send(void)
     vTaskDelay(5 / portTICK_PERIOD_MS);
     if ( !repeat_msg.repeat_count )
         return -1;
-    
+    printf("DBG: In repeat\n");
     repeat_msg.repeat_count -= 1;
     http_send_to_serv(repeat_msg.buf, repeat_msg.buf_len, repeat_msg.pack_type);
     return 0;
@@ -135,20 +180,15 @@ void http_send_to_serv(u8_t* buf, u16_t buf_len, u8_t pack_type)
     set_req_url(pack_type);
     esp_http_client_set_timeout_ms_user(_client, 500);
     int result = -1;
-    int send_attemps = 0;
-    while (send_attemps < SEND_ATTEMPS_MAX && result < 0)
-    {
-        if (send_attemps)
-            printf("WARNING: attemp to send: %d\n", send_attemps);
         
-        result = (buf_len == 0) ? send_get_req() : send_post_req(buf, buf_len);
-        send_attemps += 1;
-        if (result < 0)
-            vTaskDelay(2 / portTICK_PERIOD_MS);
-    }
+    result = (buf_len == 0) ? send_get_req() : send_post_req(buf, buf_len);
 
     if (result < 0 || result < buf_len)
+    {
         printf("ERROR: sending\n");
+        // DBG Update status working
+        _http_status = E_HTTP_STATUS_IDEL;
+    }
 }
 
 // HTTP FUNC
@@ -193,18 +233,30 @@ static void set_req_url(u8_t pack_type)
 static int send_get_req(void)
 {
     esp_http_client_set_method_user(_client, HTTP_METHOD_GET);
-    return esp_http_client_open_user(_client, 0);
+    esp_err_t err = esp_http_client_open_user(_client, 0);
+    if (err != ESP_OK) {
+        printf("ERROR: Send GET, val - %d\n", err);
+        return err;
+    }
+    client_is_open = 1;
+    return ESP_OK;
 }
 
 
 static int send_post_req(u8_t* buf, u16_t buf_len)
 {
     esp_http_client_set_method_user(_client, HTTP_METHOD_POST);
+    if (client_is_open)
+        return esp_http_client_write_user(_client, (char*)buf, buf_len);
+
     esp_err_t err = esp_http_client_open_user(_client, buf_len);
+    printf("HTTP: OPEN USER\n");
     if (err != ESP_OK) {
+        client_is_open = 0;
         printf("ERROR: Send post, val - %d\n", err);
         return ((int)err < 0) ? (int)err : -(int)err;
     }
+    client_is_open = 1;
     return esp_http_client_write_user(_client, (char*)buf, buf_len);
 }
 

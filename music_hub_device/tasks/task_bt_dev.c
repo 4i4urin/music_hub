@@ -41,6 +41,7 @@ static u8_t device_connect = 0;
 
 static t_csp_track_pack queue_data;
 extern volatile QueueHandle_t QueueHttpBtdev;
+extern volatile QueueHandle_t QueueHttpBtStatus;
 
 esp_periph_set_handle_t init_sdcard(void);
 audio_element_handle_t init_mp3_decoder(void);
@@ -53,7 +54,8 @@ audio_pipeline_handle_t init_pipeline(
 
 u16_t send_to_bluetooth_pipline(
     audio_element_handle_t raw_reader, u8_t* buf, u16_t buf_len);
-static t_csp_track_pack* btdev_read_queue(t_csp_track_pack* ptrack_data);
+static t_csp_track_pack* btdev_read_track_queue(t_csp_track_pack* ptrack_data);
+static void write_status_queue(u8_t connect_status);
 
 // #define WAV
 
@@ -101,7 +103,7 @@ void task_bt_dev(void *task_param)
             continue;
         }
 
-        pqueue_data = btdev_read_queue(&queue_data);
+        pqueue_data = btdev_read_track_queue(&queue_data);
         if (pqueue_data == NULL)
         {
             vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -128,7 +130,7 @@ void task_bt_dev(void *task_param)
 }
 
 
-static t_csp_track_pack* btdev_read_queue(t_csp_track_pack* ptrack_data)
+static t_csp_track_pack* btdev_read_track_queue(t_csp_track_pack* ptrack_data)
 {
     const u8_t queue_recive_timout = 10;
     portBASE_TYPE xStatus = xQueueReceive( QueueHttpBtdev, ptrack_data, queue_recive_timout );
@@ -151,6 +153,16 @@ u16_t send_to_bluetooth_pipline(
         printf("Something whent wrong\n");
 
     return res;
+}
+
+
+void write_status_queue(u8_t connect_status)
+{
+    const u8_t queue_send_timout = 5;
+    if ( xQueueSend( QueueHttpBtStatus, (void*)&connect_status, queue_send_timout ) == pdPASS )
+        printf("HTTP QUEUE STATUS: send successe\n");
+    else
+        printf("HTTP QUEUE STATUS: send FAILD\n");
 }
 
 //--------------------------------------------------------------------------------------
@@ -288,6 +300,7 @@ static void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             {
                 printf("A2DP device connected\n");
                 device_connect = 1;
+                write_status_queue(device_connect);
             }
             break;
         default:

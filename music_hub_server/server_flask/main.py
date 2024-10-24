@@ -53,6 +53,7 @@ class Device:
     volume_lvl: int
     track_list: TrackList
     dbg_status_count: int = 0
+    speakers: int = 0
 
     def __init__(self):
         self.id = randrange(0, 255)
@@ -60,6 +61,7 @@ class Device:
     def read_statys(self, statys: bytearray):
         self.track_list = TrackList(statys[:6])
         self.volume_lvl = statys[6]
+        self.speakers = statys[7]
 
     def print(self):
         print(f"device id = {self.id}")
@@ -160,6 +162,11 @@ def dev_statys():
     print("STATYS PACK")
 
     devices[0].read_statys(package.body)
+    if devices[0].speakers == 0:
+        print("No output device")
+        return bytes(build_resp_ack(devices[0].id, package.head.type))
+
+    print("Speakers connected can transmit traks")
     # TODO: define current, next and prev positions
     if devices[0].track_list.hash_current == 0:
         print("SWITCH PLAY LIST CURRENT")

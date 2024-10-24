@@ -26,7 +26,7 @@ extern volatile QueueHandle_t QueueHttpBtdev;
 s32_t parse_responce(u8_t* buf, u16_t len)
 {
     if (buf == NULL || len < sizeof(t_csp_head))
-        return -1;
+        return E_HTTP_ERROR_WAIT;
 
     t_csp_head* phead = (t_csp_head*)buf;    
     u8_t* pbody = _integrity_check(buf, len);
@@ -35,14 +35,14 @@ s32_t parse_responce(u8_t* buf, u16_t len)
     {
         printf("ERROR: crc\n");
         printf("WARNING: try repaet sending\n");
-        return 0;
+        return E_HTTP_ERROR_REPEAT_SEND;
     }
 
     u8_t device_id = http_get_device_id();
     if (phead->id != device_id && device_id)
     {
         printf("Not to me\n");
-        return 0;
+        return E_HTTP_ERROR_UNEXPECTED;
     }
     
     switch (phead->msg_type)
@@ -91,7 +91,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
         break;
 
         default:
-            return -3;
+            return E_HTTP_ERROR_UNEXPECTED;
     }
 
     return phead->body_len;

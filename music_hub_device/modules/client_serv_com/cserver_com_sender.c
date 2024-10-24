@@ -35,7 +35,7 @@ void send_syn(void)
         printf("Cannot create pack buf to small\n");
         return;
     }
-    http_send_to_serv(pack_buf, pack_len, head.msg_type);
+    http_create_msg(pack_buf, pack_len, head.msg_type);
 }
 
 
@@ -68,7 +68,7 @@ void send_statys(void)
         (u8_t*)&pack_buf, DEFAULT_PACK_LEN
     );
 
-    http_send_to_serv((u8_t*)&pack_buf, pack_len, head.msg_type);
+    http_create_msg((u8_t*)&pack_buf, pack_len, head.msg_type);
 }
 
 
@@ -86,7 +86,7 @@ void send_track_req(u16_t hash_track_name, u16_t pack_num)
         (u8_t*)&pack_buf, DEFAULT_PACK_LEN
     );
 
-    http_send_to_serv((u8_t*)&pack_buf, pack_len, head.msg_type);
+    http_create_msg((u8_t*)&pack_buf, pack_len, head.msg_type);
 }
 
 

@@ -59,7 +59,8 @@ void task_http(void *task_param)
 {
     esp_http_client_config_t config = {
         .url = SERVER_ADDRES,
-        .buffer_size = MAX_HTTP_OUTPUT_BUFFER
+        .buffer_size = MAX_HTTP_OUTPUT_BUFFER,
+        .keep_alive_enable = true,
     };
     _client = esp_http_client_init_user(&config);
 
@@ -69,10 +70,9 @@ void task_http(void *task_param)
     u8_t wait_count = 0; 
     while(1)
     {
-        wait_count = 0;
-
         if ( _http_status == E_HTTP_STATUS_SEND )
         {
+            wait_count = 0;
             printf("WRITE\n");
             sending_res = _proc_sending();
 
@@ -115,18 +115,16 @@ void task_http(void *task_param)
     }
 }
 
+void confirm_receive(void)
+{
+    _msg_to_serv.pack_type = 0;
+}
+
 
 static s32_t _proc_sending(void)
 {
-    _http_status = E_HTTP_STATUS_RECEIVE;
-    s32_t send_res = 0;
     if (_msg_to_serv.pack_type)
-    {
-        send_res = _http_send_to_serv(_msg_to_serv);
-        if (!send_res)
-            _msg_to_serv.pack_type = 0;
-        return send_res;
-    }
+        return _http_send_to_serv(_msg_to_serv);;
 
     // There is no msg to send. Make handshake or send status
     printf("HTTP: No ready MSG\n");
@@ -179,13 +177,15 @@ static int read_response(void)
     esp_http_client_set_timeout_ms_user(_client, 200);
     esp_http_client_fetch_headers_user(_client);
     int content_length = esp_http_client_read_user_response_user(_client, buf, MAX_HTTP_OUTPUT_BUFFER);
-    _close_client();
     
     printf("content_length = %d HTTP: CLOSE USER\n", content_length);
     // int content_length = esp_http_client_read(_client, buf, MAX_HTTP_OUTPUT_BUFFER);
     
     s32_t parse_res = parse_responce((u8_t*)buf, content_length);
-    if ( parse_res < 0) 
+    if (parse_res != E_HTTP_ERROR_WAIT)
+        _close_client();
+    
+    if ( parse_res < 0)
         printf("ERROR: Cannot parse\n");
         
     return parse_res;
@@ -194,6 +194,7 @@ static int read_response(void)
 
 static void _close_client(void)
 {
+    printf("HTTP: CLOSE USE\n");
     esp_http_client_close_user(_client);
     _client_is_open = 0;
 }

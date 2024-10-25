@@ -183,6 +183,9 @@ audio_element_handle_t init_mp3_decoder(void)
 {
     audio_element_handle_t mp3_decoder;
 
+    audio_board_handle_t board_handle = audio_board_init();
+    audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_DECODE, AUDIO_HAL_CTRL_START);
+    
     printf("[3.2] Create mp3 decoder to decode mp3 file\n");
     mp3_decoder_cfg_t mp3_cfg = DEFAULT_MP3_DECODER_CONFIG();
     mp3_cfg.out_rb_size = MP3_OUTPUT_RB_SIZE;

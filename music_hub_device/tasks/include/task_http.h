@@ -18,6 +18,7 @@ void http_set_device_id(u8_t device_id);
 
 u8_t http_get_status(void);
 void http_set_status(u8_t status);
+void confirm_receive(void);
 
 
 void print_binary(u8_t* buf, u16_t len);

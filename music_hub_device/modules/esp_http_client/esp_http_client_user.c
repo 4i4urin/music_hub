@@ -1096,7 +1096,20 @@ int esp_http_client_read_user(esp_http_client_handle_t client, char *buffer, int
             }
 
             if (rlen != ESP_ERR_HTTP_CONNECTION_CLOSED) {
-                // esp_err_t err = esp_transport_get_errno(rlen);
+                switch (rlen) {
+                case -1:
+                    printf("TRANSPORT: CONNECT CLOSE BY FIN\n");
+                    break;
+                case 0:
+                    printf("TRANSPORT: TCP TRANSPORT CONNECTION TIMEOUT\n");
+                    break;
+                case -2:
+                    printf("TRANSPORT: TCP TRANSPORT CONNECTION FAILED\n");
+                    break;
+                case -3:
+                    printf("TRANSPORT: ERR TCP TRANSPORT NO MEM\n");
+                    break;
+                }
                 ESP_LOGE(TAG, "transport_read: error - %d", rlen);
             }
 

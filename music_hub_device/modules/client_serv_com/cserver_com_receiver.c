@@ -12,7 +12,7 @@
 #include "freertos/queue.h"
 
 
-static u8_t _send_track_data_user(t_csp_track_pack* ptrack_pack);
+static s8_t _send_track_data_user(t_csp_track_pack* ptrack_pack);
 static u16_t _read_track_data(t_csp_track_pack* ptrack_pack);
 static s8_t _switch_playlist(t_csp_track_req* ptrack_req, u16_t len);
 static void _ack_proc(u8_t dev_id_pack, t_csp_ack* pack_body, u16_t len);
@@ -26,7 +26,11 @@ extern volatile QueueHandle_t QueueHttpBtdev;
 s32_t parse_responce(u8_t* buf, u16_t len)
 {
     if (buf == NULL || len < sizeof(t_csp_head))
-        return E_HTTP_ERROR_WAIT;
+    {
+        // return E_HTTP_ERROR_WAIT;
+        return E_HTTP_ERROR_REPEAT_SEND;
+    }
+        
 
     t_csp_head* phead = (t_csp_head*)buf;    
     u8_t* pbody = _integrity_check(buf, len);
@@ -35,7 +39,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
     {
         printf("ERROR: crc\n");
         printf("WARNING: try repaet sending\n");
-        return E_HTTP_ERROR_REPEAT_SEND;
+        return E_HTTP_ERROR_WAIT;
     }
 
     u8_t device_id = http_get_device_id();
@@ -45,6 +49,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
         return E_HTTP_ERROR_UNEXPECTED;
     }
     
+    confirm_receive();
     switch (phead->msg_type)
     {
         case ECSP_CONNECT:
@@ -53,14 +58,15 @@ s32_t parse_responce(u8_t* buf, u16_t len)
         case ECSP_TRACK_DATA:
             printf("PARSE: GET TRACK DATA\n");
             _read_track_data((t_csp_track_pack*)pbody);
-            _send_track_data_user((t_csp_track_pack*)pbody);
-            // http_set_status(E_HTTP_STATUS_WORK);
-
-            if (((t_csp_track_pack*)pbody)->pack_num == ((t_csp_track_pack*)pbody)->pack_total - 1)
+            if (_send_track_data_user((t_csp_track_pack*)pbody) < 0)
             {
-                // http_set_status(E_HTTP_STATUS_IDEL);
-                break;
+                printf("DO NOT KNOW WHAT TO DO\n");
+                return E_HTTP_ERROR_REPEAT_SEND;
             }
+                
+            if (((t_csp_track_pack*)pbody)->pack_num == ((t_csp_track_pack*)pbody)->pack_total - 1)
+                break;
+    
             send_track_req(
                 ((t_csp_track_pack*)pbody)->track_id,
                 ((t_csp_track_pack*)pbody)->pack_num + 1
@@ -98,9 +104,10 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 }
 
 
-static u8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
+static s8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
 {
     const u8_t queue_send_timout = 5;
+    const u8_t queue_send_try_max = 10;
     u8_t send_try_count = 0;
     while (1)
     {
@@ -111,12 +118,12 @@ static u8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
             break;
         }
         send_try_count += 1;
-        if (send_try_count >= 5)
+        if (send_try_count >= queue_send_try_max)
         {
             printf("HTTP QUEUE: send FAILD\n");
             return -1;
         }
-        vTaskDelay(1 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
     return 0;
 }

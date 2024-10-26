@@ -39,7 +39,7 @@ s32_t parse_responce(u8_t* buf, u16_t len)
     {
         printf("ERROR: crc\n");
         printf("WARNING: try repaet sending\n");
-        return E_HTTP_ERROR_WAIT;
+        return E_HTTP_ERROR_REPEAT_SEND;
     }
 
     u8_t device_id = http_get_device_id();
@@ -106,8 +106,8 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 
 static s8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
 {
-    const u8_t queue_send_timout = 5;
-    const u8_t queue_send_try_max = 10;
+    const u8_t queue_send_timout = 500 / portTICK_PERIOD_MS;
+    const u8_t queue_send_try_max = 50;
     u8_t send_try_count = 0;
     while (1)
     {
@@ -123,7 +123,7 @@ static s8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
             printf("HTTP QUEUE: send FAILD\n");
             return -1;
         }
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        vTaskDelay(500 / portTICK_PERIOD_MS);
     }
     return 0;
 }

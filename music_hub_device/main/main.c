@@ -30,12 +30,12 @@ void app_main(void)
     xTaskCreate(wifi_connect, "WIFI", 1 << 12, NULL, 1, NULL);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    QueueHttpBtdev = xQueueCreate(1, sizeof(t_csp_track_pack));
+    QueueHttpBtdev = xQueueCreate(2, sizeof(t_csp_track_pack));
     QueueHttpBtStatus = xQueueCreate(1, sizeof(u8_t));
     xTaskCreate(task_http, "TASK_HTTP", 1 << 15, NULL, 2, NULL);
     // xTaskCreate(task_sdcard, "TASK_SDCARD", 1 << 14, NULL, 2, NULL);
 
-    xTaskCreate(task_bt_dev, "TASK_BT_DEV", 1 << 12, NULL, 1, NULL);
+    xTaskCreate(task_bt_dev, "TASK_BT_DEV", 1 << 12, NULL, 3, NULL);
 
 }
 

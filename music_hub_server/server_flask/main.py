@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 ERROR: bytearray = bytearray(b'\xff\xff\xff\xff\xff\xff\xff')
 UNIQUE_DEVICE_ID: bytearray = bytearray(b'\x66\x97\xE4\x35')
-MAX_TRACK_DATA_PACK: int = 25000
+MAX_TRACK_DATA_PACK: int = (24 * 1024)
 U16_T_MAX: int = 65535
 
 
@@ -87,10 +87,8 @@ def build_track_pack(dev_id: int, track: Track, pack_num: int) -> bytes:
     body += bytearray(track.file_by_packs[pack_num])
 
     head: HeadCsp = HeadCsp.build(dev_id, TypesCsp.ECSP_TRACK_DATA, len(body))
-    head.print()
+    # head.print()
     return Package.build(head, body).full_pack
-
-
 
 
 def switch_playlist(dev_id: int, track_pos: int) -> bytes:
@@ -156,10 +154,11 @@ def connect_dev():
 
 @app.route(status, methods=['POST', 'GET'])
 def dev_statys():
+    print("STATYS PACK")
     package = Package(bytearray(request.get_data()))
     if pack_validation(package, TypesCsp.ECSP_STATUS) is False:
+        print("ERROR")
         return bytes(ERROR)
-    print("STATYS PACK")
 
     devices[0].read_statys(package.body)
     if devices[0].speakers == 0:
@@ -170,25 +169,25 @@ def dev_statys():
     # TODO: define current, next and prev positions
     if devices[0].track_list.hash_current == 0:
         print("SWITCH PLAY LIST CURRENT")
-        return bytes(switch_playlist(devices[0].id, 1))
+        return bytes(switch_playlist(devices[0].id, 0))
     elif devices[0].track_list.hash_next == 0:
         print("SWITCH PLAY LIST NEXT")
         return bytes(switch_playlist(devices[0].id, 2))
     elif devices[0].track_list.hash_prev == 0:
         print("SWITCH PLAY LIST PREV")
-        return bytes(switch_playlist(devices[0].id, 0))
+        return bytes(switch_playlist(devices[0].id, 1))
 
     return bytes(build_resp_ack(devices[0].id, package.head.type))
 
 
 @app.route(track, methods=['POST', 'GET'])
 def track_transmission():
+    print("GET TRACK")
     package = Package(bytearray(request.get_data()))
     if pack_validation(package, TypesCsp.ECSP_COM_GET_TRACK) is False:
+        print("ERROR")
         return bytes(ERROR)
 
-    print("GET TRACK")
-    print(package.body.hex(":"))
     track_hash: int = int.from_bytes(package.body[:2], "little")
     track_pack_num: int = int.from_bytes(package.body[2:4], "little")
     print(f"req of {track_pack_num} pack")
@@ -202,6 +201,7 @@ def track_transmission():
     if track_pack_num == 0:
         track.file_by_packs = parce_music_file(track.path)
 
+    print("SEND")
     return bytes(build_track_pack(devices[0].id, track, track_pack_num))
 
 

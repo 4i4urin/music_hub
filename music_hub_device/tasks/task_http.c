@@ -11,7 +11,7 @@
 #include "cserver_com_receiver.h"
 
 
-#define MAX_HTTP_OUTPUT_BUFFER 25596
+#define MAX_HTTP_OUTPUT_BUFFER 24700
 
 #define SEND_ATTEMPS_MAX 1
 
@@ -142,7 +142,7 @@ static s32_t _proc_receiving(void)
 {
     s32_t read_res = 0;
 
-    esp_http_client_set_timeout_ms_user(_client, 1);
+    esp_http_client_set_timeout_ms_user(_client, 10);
     if (esp_http_client_poll_read_user(_client) <= 0)
         return E_HTTP_STATUS_WAIT;
     
@@ -174,16 +174,21 @@ static int read_response(void)
 {
     static char buf[MAX_HTTP_OUTPUT_BUFFER] = { 0 };
     
-    esp_http_client_set_timeout_ms_user(_client, 200);
-    esp_http_client_fetch_headers_user(_client);
-    int content_length = esp_http_client_read_user_response_user(_client, buf, MAX_HTTP_OUTPUT_BUFFER);
+    esp_http_client_set_timeout_ms_user(_client, 300);
+    int pre_length = esp_http_client_fetch_headers_user(_client);
+    int content_length = 0;
+    u8_t try_recieve_count = 0;
+    const u8_t try_recieve_count_max = 7;
+    while (content_length < pre_length && try_recieve_count < try_recieve_count_max)
+    {
+        content_length += esp_http_client_read_user_response_user(_client, buf, pre_length);
+        try_recieve_count += 1;
+    }
     
-    printf("content_length = %d HTTP: CLOSE USER\n", content_length);
-    // int content_length = esp_http_client_read(_client, buf, MAX_HTTP_OUTPUT_BUFFER);
+    printf("content_length = %d pre_length = %d HTTP: CLOSE USER\n", content_length, pre_length);
     
     s32_t parse_res = parse_responce((u8_t*)buf, content_length);
-    if (parse_res != E_HTTP_ERROR_WAIT)
-        _close_client();
+    _close_client();
     
     if ( parse_res < 0)
         printf("ERROR: Cannot parse\n");
@@ -295,16 +300,16 @@ static int send_get_req(void)
 static int send_post_req(u8_t* buf, u16_t buf_len)
 {
     esp_http_client_set_method_user(_client, HTTP_METHOD_POST);
-    if (_client_is_open)
-        return esp_http_client_write_user(_client, (char*)buf, buf_len);
+    // if (_client_is_open)
+    //     return esp_http_client_write_user(_client, (char*)buf, buf_len);
 
     esp_err_t err = esp_http_client_open_user(_client, buf_len);
-    printf("HTTP: OPEN USER\n");
     if (err != ESP_OK) {
         _client_is_open = 0;
         printf("ERROR: Send post, val - %d\n", err);
         return ((int)err < 0) ? (int)err : -(int)err;
     }
+    printf("HTTP: OPEN USER\n");
     _client_is_open = 1;
     return esp_http_client_write_user(_client, (char*)buf, buf_len);
 }

@@ -108,7 +108,7 @@ static u8_t hexu16_to_string(u16_t hex_num, char* str, u8_t max_str_len)
 
 static t_csp_track_pack* sdcard_read_queue(t_csp_track_pack* ptrack_data)
 {
-    const u8_t queue_recive_timout = 10;
+    // const u8_t queue_recive_timout = 10;
     // portBASE_TYPE xStatus = xQueueReceive( QueueHttpSD, ptrack_data, queue_recive_timout );
     // TODO: rework this function
     // DBG

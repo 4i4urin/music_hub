@@ -76,7 +76,6 @@ class Package:
         else:
             pack_burst: bytearray = bytearray(head.bytes) + body
         crc16: bytearray = bytearray(Crc16Arc.calc(pack_burst).to_bytes(2, "little"))
-        print(crc16.hex(":"))
         return cls(pack_burst + crc16)
 
 

@@ -97,7 +97,9 @@ typedef struct _t_csp_status
 #define    ECSP_TRACK_FORMAT_MP3 1
 #define    ECSP_TRACK_FORMAT_SBC 2
 
-#define MAX_TRACK_DATA (24 * 1024) // 12 kb
+#define MAX_TRACK_DATA (12 * 1024) // 12 kb
+
+typedef u8_t t_track_data[MAX_TRACK_DATA];
 // ECSP_TRACK_DATA just data
 typedef struct _t_csp_track_pack
 {
@@ -106,7 +108,7 @@ typedef struct _t_csp_track_pack
     u16_t pack_total;           // amount of track packs in the one track
     u16_t pack_num;             // number of track packege in sequence from 0
     u16_t track_len;            // number of useable bytes in track field
-    u8_t track[MAX_TRACK_DATA];    // binary track data
+    t_track_data track;    // binary track data
 } t_csp_track_pack;
 
 

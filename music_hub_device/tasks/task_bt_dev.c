@@ -29,7 +29,6 @@
 #define MP3_OUTPUT_RB_SIZE (2 * 1024)
 
 
-// static u8_t buf[SEND_SIZE] = { 0 };
 
 typedef u8_t esp_peer_bdname_t[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
 static esp_peer_bdname_t remote_bt_device_name;
@@ -39,7 +38,7 @@ static esp_bd_addr_t remote_bd_addr = {0};
 static u8_t device_found = 0;
 static u8_t device_connect = 0;
 
-static t_csp_track_pack queue_data;
+// static t_csp_track_pack queue_data;
 extern volatile QueueHandle_t QueueHttpBtdev;
 extern volatile QueueHandle_t QueueHttpBtStatus;
 
@@ -54,7 +53,7 @@ audio_pipeline_handle_t init_pipeline(
 
 u16_t send_to_bluetooth_pipline(
     audio_element_handle_t raw_reader, u8_t* buf, u16_t buf_len);
-static t_csp_track_pack* btdev_read_track_queue(t_csp_track_pack* ptrack_data);
+static t_queue_HttpBtData* btdev_read_track_queue(t_queue_HttpBtData* ptrack_data);
 static void write_status_queue(u8_t connect_status);
 
 // #define WAV
@@ -92,7 +91,8 @@ void task_bt_dev(void *task_param)
     
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
-    t_csp_track_pack* pqueue_data = NULL;
+    t_queue_HttpBtData* pqueue_data = NULL;
+    t_queue_HttpBtData queue_data = { 0 };
     u16_t pack_size = 0, written_bytes = 0;
     u16_t send_size = SEND_SIZE;
     while (1)
@@ -109,14 +109,14 @@ void task_bt_dev(void *task_param)
             vTaskDelay(100 / portTICK_PERIOD_MS);
             continue;
         }
-        pack_size = pqueue_data->track_len;
+        pack_size = pqueue_data->data_len;
         while (pack_size)
         {
             send_size = (pack_size > send_size) ? SEND_SIZE : pack_size;
 
             written_bytes = send_to_bluetooth_pipline(
                 raw_reader, 
-                &(pqueue_data->track[0]) + pqueue_data->track_len - pack_size, 
+                pqueue_data->ptr_data + pqueue_data->data_len - pack_size, 
                 send_size);
 
             if (send_size != (u16_t)written_bytes)
@@ -125,18 +125,22 @@ void task_bt_dev(void *task_param)
             pack_size -= (u16_t)written_bytes;
             vTaskDelay(25 / portTICK_PERIOD_MS);
         }
+        printf("SEND TO BT full pack\n");
     }
 
 }
 
 
-static t_csp_track_pack* btdev_read_track_queue(t_csp_track_pack* ptrack_data)
+static t_queue_HttpBtData* btdev_read_track_queue(t_queue_HttpBtData* ptrack_data)
 {
     const u8_t queue_recive_timout = 10;
+    printf("TRY read queue\n");
     portBASE_TYPE xStatus = xQueueReceive( QueueHttpBtdev, ptrack_data, queue_recive_timout );
-
     if ( xStatus == pdPASS )
+    {
+        printf("TRACK GET data = %x, len = %d\n", ptrack_data->ptr_data[0], ptrack_data->data_len);
         return ptrack_data;
+    }
     else
         return NULL;
 }
@@ -188,7 +192,7 @@ audio_element_handle_t init_mp3_decoder(void)
     
     printf("[3.2] Create mp3 decoder to decode mp3 file\n");
     mp3_decoder_cfg_t mp3_cfg = DEFAULT_MP3_DECODER_CONFIG();
-    mp3_cfg.out_rb_size = MP3_OUTPUT_RB_SIZE;
+    mp3_cfg.out_rb_size *= 2;
 
     mp3_decoder = mp3_decoder_init(&mp3_cfg);
     return mp3_decoder;

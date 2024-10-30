@@ -22,6 +22,16 @@ static u8_t* _integrity_check(u8_t* buf, u16_t len);
 static t_track_list _track_list = { 0 };
 extern volatile QueueHandle_t QueueHttpBtdev;
 
+#define QUEUE_HTTP_BT_ARR_SIZE   (QUEUE_HTTP_BT_SIZE + 1)
+t_track_data track_buf_arr[QUEUE_HTTP_BT_ARR_SIZE] = { 0 };
+
+u8_t queue_HttpBtData_index = 0;
+t_queue_HttpBtData queue_HttpBtData[QUEUE_HTTP_BT_ARR_SIZE] = {
+    {.ptr_data = track_buf_arr[0]},
+    {.ptr_data = track_buf_arr[1]},
+    {.ptr_data = track_buf_arr[2]}
+};
+
 
 s32_t parse_responce(u8_t* buf, u16_t len)
 {
@@ -83,12 +93,9 @@ s32_t parse_responce(u8_t* buf, u16_t len)
         case ECSP_COM_SWITCH_LIST:
             printf("PARSE: SWITCH PLAY LIST\n");
             if (_switch_playlist((t_csp_track_req*)pbody, phead->body_len) < 0)
-                // http_set_status(E_HTTP_STATUS_IDEL);
                 break;
             else
                 break;
-                // http_set_status(E_HTTP_STATUS_WORK);
-            // break;
 
         case ECSP_COM_GET_TRACK:
         case ECSP_ACK:
@@ -107,23 +114,23 @@ s32_t parse_responce(u8_t* buf, u16_t len)
 static s8_t _send_track_data_user(t_csp_track_pack* ptrack_pack)
 {
     const u8_t queue_send_timout = 500 / portTICK_PERIOD_MS;
-    const u8_t queue_send_try_max = 50;
-    u8_t send_try_count = 0;
-    while (1)
+
+    while (uxQueueMessagesWaiting(QueueHttpBtdev) > (QUEUE_HTTP_BT_ARR_SIZE - QUEUE_HTTP_BT_SIZE))
     {
-        if ( xQueueSend( QueueHttpBtdev, (void*)ptrack_pack, queue_send_timout ) == pdPASS )
-        {
-            printf("HTTP QUEUE: send successe\n");
-            printf("track_num = %d\n\n", ptrack_pack->track_id);
-            break;
-        }
-        send_try_count += 1;
-        if (send_try_count >= queue_send_try_max)
-        {
-            printf("HTTP QUEUE: send FAILD\n");
-            return -1;
-        }
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        printf("TASK delay\n");
+    }
+    memcpy(queue_HttpBtData[queue_HttpBtData_index].ptr_data, ptrack_pack->track, ptrack_pack->track_len);
+    queue_HttpBtData[queue_HttpBtData_index].data_len = ptrack_pack->track_len;
+    
+    printf("TRACK SEND data = %x, len = %d index = %d\n", 
+    queue_HttpBtData[queue_HttpBtData_index].ptr_data[0], queue_HttpBtData[queue_HttpBtData_index].data_len, queue_HttpBtData_index);
+    if ( xQueueSend( QueueHttpBtdev, (void*)(queue_HttpBtData + queue_HttpBtData_index), queue_send_timout ) == pdPASS )
+    {
+        printf("HTTP QUEUE: send successe\n");
+        queue_HttpBtData_index += 1;
+        if (queue_HttpBtData_index >= QUEUE_HTTP_BT_ARR_SIZE)
+            queue_HttpBtData_index = 0;
     }
     return 0;
 }

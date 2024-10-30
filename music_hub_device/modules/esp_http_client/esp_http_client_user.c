@@ -816,22 +816,22 @@ esp_err_t esp_http_client_cleanup_user(esp_http_client_handle_t client)
     return ESP_OK;
 }
 
-// esp_err_t esp_http_client_set_redirection(esp_http_client_handle_t client)
-// {
-//     if (client == NULL) {
-//         return ESP_ERR_INVALID_ARG;
-//     }
-//     if (client->location == NULL) {
-//         return ESP_ERR_INVALID_ARG;
-//     }
-//     ESP_LOGD(TAG, "Redirect to %s", client->location);
-//     esp_err_t err = esp_http_client_set_url_user(client, client->location);
-//     if (err == ESP_OK) {
-//         client->redirect_counter ++;
-//         client->process_again = 1;  // used only in the blocking mode (when esp_http_client_perform_user() is called)
-//     }
-//     return err;
-// }
+esp_err_t esp_http_client_set_redirection_user(esp_http_client_handle_t client)
+{
+    if (client == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (client->location == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ESP_LOGD(TAG, "Redirect to %s", client->location);
+    esp_err_t err = esp_http_client_set_url_user(client, client->location);
+    if (err == ESP_OK) {
+        client->redirect_counter ++;
+        client->process_again = 1;  // used only in the blocking mode (when esp_http_client_perform_user() is called)
+    }
+    return err;
+}
 
 static esp_err_t esp_http_check_response_user(esp_http_client_handle_t client)
 {
@@ -1550,65 +1550,65 @@ esp_http_client_transport_t esp_http_client_get_transport_type_user(esp_http_cli
     }
 }
 
-// void esp_http_client_add_auth(esp_http_client_handle_t client)
-// {
-//     if (client == NULL) {
-//         return;
-//     }
-//     if (client->state != HTTP_STATE_RES_ON_DATA_START) {
-//         return;
-//     }
-//     if (client->redirect_counter >= client->max_authorization_retries) {
-//         ESP_LOGE(TAG, "Error, reached max_authorization_retries count=%d", client->redirect_counter);
-//         return;
-//     }
+void esp_http_client_add_auth_user(esp_http_client_handle_t client)
+{
+    if (client == NULL) {
+        return;
+    }
+    if (client->state != HTTP_STATE_RES_ON_DATA_START) {
+        return;
+    }
+    if (client->redirect_counter >= client->max_authorization_retries) {
+        ESP_LOGE(TAG, "Error, reached max_authorization_retries count=%d", client->redirect_counter);
+        return;
+    }
 
-//     char *auth_header = client->auth_header;
-//     if (auth_header) {
-//         http_utils_trim_whitespace(&auth_header);
-//         ESP_LOGD(TAG, "UNAUTHORIZED: %s", auth_header);
-//         client->redirect_counter++;
-// #ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_DIGEST_AUTH
-//         if (http_utils_str_starts_with(auth_header, "Digest") == 0) {
-//             ESP_LOGD(TAG, "type = Digest");
-//             client->connection_info.auth_type = HTTP_AUTH_TYPE_DIGEST;
-//         } else {
-// #endif
-// #ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH
-//         if (http_utils_str_starts_with(auth_header, "Basic") == 0) {
-//             ESP_LOGD(TAG, "type = Basic");
-//             client->connection_info.auth_type = HTTP_AUTH_TYPE_BASIC;
-//         } else {
-// #endif
-//             client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
-//             ESP_LOGE(TAG, "This authentication method is not supported: %s", auth_header);
-//             return;
-// #ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH
-//         }
-// #endif
-// #ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_DIGEST_AUTH
-//         }
-// #endif
+    char *auth_header = client->auth_header;
+    if (auth_header) {
+        http_utils_trim_whitespace(&auth_header);
+        ESP_LOGD(TAG, "UNAUTHORIZED: %s", auth_header);
+        client->redirect_counter++;
+#ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_DIGEST_AUTH
+        if (http_utils_str_starts_with(auth_header, "Digest") == 0) {
+            ESP_LOGD(TAG, "type = Digest");
+            client->connection_info.auth_type = HTTP_AUTH_TYPE_DIGEST;
+        } else {
+#endif
+#ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH
+        if (http_utils_str_starts_with(auth_header, "Basic") == 0) {
+            ESP_LOGD(TAG, "type = Basic");
+            client->connection_info.auth_type = HTTP_AUTH_TYPE_BASIC;
+        } else {
+#endif
+            client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
+            ESP_LOGE(TAG, "This authentication method is not supported: %s", auth_header);
+            return;
+#ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH
+        }
+#endif
+#ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_DIGEST_AUTH
+        }
+#endif
 
-//         _clear_auth_data_user(client);
+        _clear_auth_data_user(client);
 
-//         client->auth_data->method = strdup(HTTP_METHOD_MAPPING[client->connection_info.method]);
+        client->auth_data->method = strdup(HTTP_METHOD_MAPPING[client->connection_info.method]);
 
-//         client->auth_data->nc = 1;
-//         client->auth_data->realm = http_utils_get_string_between(auth_header, "realm=\"", "\"");
-//         client->auth_data->algorithm = http_utils_get_string_between(auth_header, "algorithm=", ",");
-//         if (client->auth_data->algorithm == NULL) {
-//             client->auth_data->algorithm = strdup("MD5");
-//         }
-//         client->auth_data->qop = http_utils_get_string_between(auth_header, "qop=\"", "\"");
-//         client->auth_data->nonce = http_utils_get_string_between(auth_header, "nonce=\"", "\"");
-//         client->auth_data->opaque = http_utils_get_string_between(auth_header, "opaque=\"", "\"");
-//         client->process_again = 1;
-//     } else {
-//         client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
-//         ESP_LOGW(TAG, "This request requires authentication, but does not provide header information for that");
-//     }
-// }
+        client->auth_data->nc = 1;
+        client->auth_data->realm = http_utils_get_string_between(auth_header, "realm=\"", "\"");
+        client->auth_data->algorithm = http_utils_get_string_between(auth_header, "algorithm=", ",");
+        if (client->auth_data->algorithm == NULL) {
+            client->auth_data->algorithm = strdup("MD5");
+        }
+        client->auth_data->qop = http_utils_get_string_between(auth_header, "qop=\"", "\"");
+        client->auth_data->nonce = http_utils_get_string_between(auth_header, "nonce=\"", "\"");
+        client->auth_data->opaque = http_utils_get_string_between(auth_header, "opaque=\"", "\"");
+        client->process_again = 1;
+    } else {
+        client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
+        ESP_LOGW(TAG, "This request requires authentication, but does not provide header information for that");
+    }
+}
 
 int esp_http_client_read_user_response_user(esp_http_client_handle_t client, char *buffer, int len)
 {

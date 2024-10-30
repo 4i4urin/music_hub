@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 ERROR: bytearray = bytearray(b'\xff\xff\xff\xff\xff\xff\xff')
 UNIQUE_DEVICE_ID: bytearray = bytearray(b'\x66\x97\xE4\x35')
-MAX_TRACK_DATA_PACK: int = (24 * 1024)
+MAX_TRACK_DATA_PACK: int = (12 * 1024)
 U16_T_MAX: int = 65535
 
 
@@ -169,10 +169,10 @@ def dev_statys():
     # TODO: define current, next and prev positions
     if devices[0].track_list.hash_current == 0:
         print("SWITCH PLAY LIST CURRENT")
-        return bytes(switch_playlist(devices[0].id, 0))
+        return bytes(switch_playlist(devices[0].id, 2))
     elif devices[0].track_list.hash_next == 0:
         print("SWITCH PLAY LIST NEXT")
-        return bytes(switch_playlist(devices[0].id, 2))
+        return bytes(switch_playlist(devices[0].id, 0))
     elif devices[0].track_list.hash_prev == 0:
         print("SWITCH PLAY LIST PREV")
         return bytes(switch_playlist(devices[0].id, 1))

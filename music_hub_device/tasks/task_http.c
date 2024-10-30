@@ -213,6 +213,9 @@ void http_create_msg(u8_t* buf, u16_t buf_len, u8_t pack_type)
         _msg_to_serv.buf_len = buf_len;
         _msg_to_serv.pack_type = pack_type;
         _msg_to_serv.repeat_count = SEND_ATTEMPS_MAX;
+    } else
+    {
+        printf("ERROR BAD MSG\nERROR BAD MSG\n\n\n");
     }
 }
 
@@ -239,7 +242,9 @@ static s32_t _http_send_to_serv(t_msg_to_serv msg)
 
     if (result < 0 || result < msg.buf_len)
     {
-        printf("ERROR: sending\n");
+        printf("ERROR: sending try to perform result = %d\n", result);
+        // esp_err_t err = esp_http_client_perform_user(_client);
+        // printf("After perform err = %d\n", err);
         return E_HTTP_ERROR_REPEAT_SEND;
     }
     return 0;

@@ -3,7 +3,8 @@ from dataclasses import dataclass
 
 from private import *
 
-client = Client(token)
+client = Client(token).init()
+
 
 @dataclass
 class SearchRequest:
@@ -98,10 +99,13 @@ if __name__ == '__main__':
     i = 0
     for request in search:
         result: SearchResult = yandex_music_search(request)
+        if result is None:
+            continue
+
         print(f"{result.type}, id = {result.object_id}")
         if result.type == "track":
             i += 1
-            # client.tracks(result.object_id)[0].download(f"track_{i}.mp3")
+            client.tracks(result.object_id)[0].download(f"track_{i}.mp3")
             similar_tracks = client.tracks_similar(result.object_id)
             for track in similar_tracks:
                 print(f"{track['title']} - {track['artists'][0]['name']}", )

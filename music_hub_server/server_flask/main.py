@@ -229,7 +229,7 @@ if __name__ == '__main__':
     num: int = 0
     for file in files:
         if ".mp3" in file:
-            track_list.append(Track(os.getcwd() + "\\" + file, num))
+            track_list.append(Track(os.getcwd() + "/" + file, num))
             num += 1
 
     app.run(debug=True, port=5000, host='0.0.0.0')

@@ -3,6 +3,10 @@ from dataclasses import dataclass
 
 from private import *
 
+from alisa_parcer import extract_music_name
+from test_parcer import requests, answers
+
+
 client = Client(token).init()
 
 
@@ -92,22 +96,28 @@ def yandex_music_search(query: SearchRequest) -> SearchResult | None:
 
 if __name__ == '__main__':
     client.init()
-    search = [SearchRequest(track="Марабу"), SearchRequest(album="Queen"), SearchRequest(artist="Jungle"),
-              SearchRequest(playlist="100 инди-хитов"), SearchRequest(artist="Phoebe Bridgers", album="Punisher"),
-              SearchRequest(track="Я устал", album="1917"), SearchRequest(track="Машины летят", artist="НЕДРЫ"),
-              SearchRequest(track="Europe is Lost", album="Let Them Eat Chaos", artist="Kae Tempest")]
-    i = 0
-    for request in search:
-        result: SearchResult = yandex_music_search(request)
-        if result is None:
-            continue
+    pass_count: int = 0
+    search_str: list[str] = [""] * len(requests)
 
-        print(f"{result.type}, id = {result.object_id}")
-        if result.type == "track":
-            i += 1
-            client.tracks(result.object_id)[0].download(f"track_{i}.mp3")
-            similar_tracks = client.tracks_similar(result.object_id)
-            for track in similar_tracks:
-                print(f"{track['title']} - {track['artists'][0]['name']}", )
-        print("\n\n")
+    for i in range(len(requests)):
+        search_str[i] = extract_music_name(requests[i])
+        print(f"{answers[i]} -> {search_str[i]}")
+        if answers[i] == search_str[i]:
+            print("Pass\n")
+            pass_count += 1
+        else:
+            print(f"req: {requests[i]}\nanswer: {answers[i]}")
+            print("*** FAIL ***\n")
 
+    print(f"Выполнено тестов: {len(requests)} успешных: {pass_count}")
+
+    for i in range(len(requests)):
+        search_result = client.search(search_str[i])
+        print(f"req: {search_str[i]}")
+        print(f"result_type: {search_result.best.type}")
+        if search_result.best.type == "track" or search_result.best.type == "album":
+            print(f"result: {search_result.best.result['title']}\n")
+        elif search_result.best.type == "artist":
+            print(f"result: {search_result.best.result['name']}\n")
+        else:
+            print(f"result: {search_result.best.result}\n")

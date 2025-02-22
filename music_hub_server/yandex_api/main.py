@@ -5,6 +5,7 @@ from private import *
 
 from alisa_parcer import extract_music_name
 from test_parcer import requests, answers
+import random
 
 
 client = Client(token).init()
@@ -94,6 +95,11 @@ def yandex_music_search(query: SearchRequest) -> SearchResult | None:
     return None
 
 
+def download_track(track_id: int) -> None:
+    name: str = client.tracks(track_id)[0].title
+    client.tracks(track_id)[0].download(f"track_{name}.mp3")
+
+
 if __name__ == '__main__':
     client.init()
     pass_count: int = 0
@@ -111,13 +117,36 @@ if __name__ == '__main__':
 
     print(f"Выполнено тестов: {len(requests)} успешных: {pass_count}")
 
-    for i in range(len(requests)):
-        search_result = client.search(search_str[i])
-        print(f"req: {search_str[i]}")
+    DOWNLOAD_TRACK_COUNT: int = 5
+    index_list: list[int] = [0] * DOWNLOAD_TRACK_COUNT
+    for i in range(DOWNLOAD_TRACK_COUNT):
+        index_list[i] = round(random.random() * 100)
+
+    for index in index_list:
+        search_result = client.search(search_str[index])
+        print(f"req: {search_str[index]}")
         print(f"result_type: {search_result.best.type}")
-        if search_result.best.type == "track" or search_result.best.type == "album":
+
+        if search_result.best.type == "track" or search_result.best.type == "album" or search_result.best.type == "playlist":
             print(f"result: {search_result.best.result['title']}\n")
         elif search_result.best.type == "artist":
             print(f"result: {search_result.best.result['name']}\n")
         else:
             print(f"result: {search_result.best.result}\n")
+
+        if search_result.best.type == "track":
+            download_track(search_result.best.result.id)
+        elif search_result.best.type == "album":
+            album = client.albums(search_result.best.result.id)[0]
+            download_track(album.with_tracks().volumes[0][0].id)
+        elif search_result.best.type == "artist":
+            artist = client.artists(search_result.best.result.id)[0]
+            download_track(artist.get_tracks().tracks[0].id)
+        elif search_result.best.type == "playlist":
+            playlistID = f"{search_result.best.result['uid']}:{search_result.best.result['kind']}"
+            playlist = client.playlistsList(playlistID)[0]
+            download_track(playlist.fetch_tracks()[0].track.id)
+        else:
+            print(f"ERROR: unknown type {search_result.best.type}")
+
+

@@ -151,7 +151,6 @@ def connect_dev():
     return bytes(build_resp_ack(devices[0].id, package.head.type))
 
 
-
 @app.route(status, methods=['POST', 'GET'])
 def dev_statys():
     print("STATYS PACK")
@@ -224,6 +223,16 @@ def get_message():
     return jsonify("ERROR: NO CONNECTED DEV")
 
 
+def get_device_id() -> int:
+    if not devices:
+        return 0
+    return devices[0].id
+
+
+def run_server():
+    app.run(debug=True, port=5000, host='0.0.0.0')
+
+
 if __name__ == '__main__':
     files = [f for f in os.listdir(os.getcwd()) if isfile(join(os.getcwd(), f))]
     num: int = 0
@@ -232,4 +241,4 @@ if __name__ == '__main__':
             track_list.append(Track(os.getcwd() + "/" + file, num))
             num += 1
 
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    run_server()

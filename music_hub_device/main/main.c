@@ -14,6 +14,9 @@
 
 #include "client_serv_prot.h"
 
+#define WIFI_TASK_SIZE (5120)
+#define HTTP_TASK_SIZE (18432)
+#define BT_TASK_SIZE (5120)
 
 volatile QueueHandle_t QueueHttpBtdev;
 volatile QueueHandle_t QueueHttpBtStatus;
@@ -27,16 +30,17 @@ void app_main(void)
     nvs_flash_init();
     // ???? may be unite WIFI and TASK_HTTP
     // xTaskCreate(task_test_com, "TEST_COM", 1 << 10, NULL, 3, NULL);
-    xTaskCreate(wifi_connect, "WIFI", 1 << 12, NULL, 1, NULL);
+    xTaskCreate(wifi_connect, "WIFI", WIFI_TASK_SIZE, NULL, 1, NULL);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     QueueHttpBtdev = xQueueCreate(QUEUE_HTTP_BT_SIZE, sizeof(t_queue_HttpBtData));
     QueueHttpBtStatus = xQueueCreate(1, sizeof(u8_t));
-    xTaskCreate(task_http, "TASK_HTTP", 1 << 15, NULL, 2, NULL);
+    // 16 384 1 << 14
+    // 32 768 1 << 15
+    xTaskCreate(task_http, "TASK_HTTP", HTTP_TASK_SIZE, NULL, 3, NULL);
+    
+    xTaskCreate(task_bt_dev, "TASK_BT_DEV", BT_TASK_SIZE, NULL, 2, NULL);
     // xTaskCreate(task_sdcard, "TASK_SDCARD", 1 << 14, NULL, 2, NULL);
-
-    xTaskCreate(task_bt_dev, "TASK_BT_DEV", 1 << 12, NULL, 3, NULL);
-
 }
 
 

@@ -241,11 +241,12 @@ audio_element_handle_t init_bt_stream(void)
     ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
     ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT));
     ESP_ERROR_CHECK(esp_bluedroid_init());
+    printf("KEKEKEK\n\n");
     ESP_ERROR_CHECK(esp_bluedroid_enable());
 
     esp_bt_dev_set_device_name(DEVICE_NAME);
     esp_bt_gap_register_callback(bt_app_gap_cb);
-
+    
     memcpy(&remote_bt_device_name, BT_REMOTE_NAME, strlen(BT_REMOTE_NAME) + 1);
     
     a2dp_stream_config_t a2dp_config = 
@@ -260,7 +261,7 @@ audio_element_handle_t init_bt_stream(void)
 
     esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 10, 0);
     esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-
+    printf("SOME SHEET\n\n");
     return bt_stream_writer;
 }
 

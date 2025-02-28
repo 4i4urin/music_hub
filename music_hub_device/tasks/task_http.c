@@ -11,7 +11,7 @@
 #include "cserver_com_receiver.h"
 
 
-#define MAX_HTTP_OUTPUT_BUFFER 24700
+#define MAX_HTTP_OUTPUT_BUFFER (sizeof(t_csp_track_pack) + 100)
 
 #define SEND_ATTEMPS_MAX 1
 

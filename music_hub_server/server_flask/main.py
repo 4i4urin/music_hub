@@ -10,12 +10,20 @@ from flask import Flask, jsonify
 from flask import request
 import os
 
+from yandex_music import Client
+
+from yandex_api import download_user_req
+import random
+from test_user_req import requests
+
+
 app = Flask(__name__)
+client = Client(ya_token).init()
 
 
 ERROR: bytearray = bytearray(b'\xff\xff\xff\xff\xff\xff\xff')
 UNIQUE_DEVICE_ID: bytearray = bytearray(b'\x66\x97\xE4\x35')
-MAX_TRACK_DATA_PACK: int = (12 * 1024)
+MAX_TRACK_DATA_PACK: int = (8 * 1024)
 U16_T_MAX: int = 65535
 
 
@@ -34,7 +42,7 @@ class Track:
         self.file_size = os.stat(path).st_size
 
 
-class TrackList:
+class DeviceTrackList:
     hash_prev: int
     hash_current: int
     hash_next: int
@@ -51,7 +59,7 @@ class TrackList:
 class Device:
     id: int
     volume_lvl: int
-    track_list: TrackList
+    track_list: DeviceTrackList
     dbg_status_count: int = 0
     speakers: int = 0
 
@@ -59,7 +67,7 @@ class Device:
         self.id = randrange(0, 255)
 
     def read_statys(self, statys: bytearray):
-        self.track_list = TrackList(statys[:6])
+        self.track_list = DeviceTrackList(statys[:6])
         self.volume_lvl = statys[6]
         self.speakers = statys[7]
 
@@ -69,8 +77,16 @@ class Device:
         self.track_list.print()
 
 
+class PlayList:
+    track_num: int = 0
+    track_list: list[Track] = []
+    device_track_list: list[Track] = []
+    switch_track: bool
+
+
 devices: list[Device] = []
-track_list: list[Track] = []
+playlist = PlayList()
+
 
 
 def build_resp_ack(dev_id: int, received_pack_id: TypesCsp) -> bytes:
@@ -93,22 +109,27 @@ def build_track_pack(dev_id: int, track: Track, pack_num: int) -> bytes:
 
 def switch_playlist(dev_id: int, track_pos: int) -> bytes:
     head: HeadCsp = HeadCsp.build(dev_id, TypesCsp.ECSP_COM_SWITCH_LIST, 4)
-    body: bytearray = bytearray(track_list[track_pos].hash_name.to_bytes(2, "little"))
+    if playlist.device_track_list[track_pos] is None:
+        print(f"ERROR: no such track num: {track_pos}")
+        return bytes(ERROR)
 
-    if track_list[track_pos].file_size // MAX_TRACK_DATA_PACK + 1 > U16_T_MAX:
+    track_to_send: Track = playlist.device_track_list[track_pos]
+    body: bytearray = bytearray(track_to_send.hash_name.to_bytes(2, "little"))
+
+    if track_to_send.file_size // MAX_TRACK_DATA_PACK + 1 > U16_T_MAX:
         print("Too big file")
         return bytes(ERROR)
 
-    if track_list[track_pos].file_size % MAX_TRACK_DATA_PACK != 0:
-        amount_packs: int = track_list[track_pos].file_size // MAX_TRACK_DATA_PACK + 1
+    if track_to_send.file_size % MAX_TRACK_DATA_PACK != 0:
+        amount_packs: int = track_to_send.file_size // MAX_TRACK_DATA_PACK + 1
     else:
-        amount_packs: int = track_list[track_pos].file_size // MAX_TRACK_DATA_PACK
+        amount_packs: int = track_to_send.file_size // MAX_TRACK_DATA_PACK
 
     body += bytearray(amount_packs.to_bytes(2, "little"))
     body += bytearray(track_pos.to_bytes(1, "little"))
     pack: Package = Package.build(head, body)
 
-    print(pack.full_pack.hex(":"))
+    # print(pack.full_pack.hex(":"))
     return pack.full_pack
 
 
@@ -142,7 +163,8 @@ def connect_dev():
         print("WARNING: wrong unique number")
         return bytes(ERROR)
     # add device
-    if devices is not None:
+    if not devices:
+        print("Connect dev")
         dev = Device()
         # TODO: remake adding dev for debug
         devices.append(dev)
@@ -166,15 +188,18 @@ def dev_statys():
 
     print("Speakers connected can transmit traks")
     # TODO: define current, next and prev positions
-    if devices[0].track_list.hash_current == 0:
+    # if devices[0].track_list.hash_current == 0:
+    #     print("SWITCH PLAY LIST CURRENT")
+    #     return bytes(switch_playlist(devices[0].id, 2))
+    # elif devices[0].track_list.hash_next == 0:
+    #     print("SWITCH PLAY LIST NEXT")
+    #     return bytes(switch_playlist(devices[0].id, 0))
+    # elif devices[0].track_list.hash_prev == 0:
+    #     print("SWITCH PLAY LIST PREV")
+    #     return bytes(switch_playlist(devices[0].id, 1))
+    if devices[0].track_list.hash_current == 0 and playlist.track_num != 0:
         print("SWITCH PLAY LIST CURRENT")
-        return bytes(switch_playlist(devices[0].id, 2))
-    elif devices[0].track_list.hash_next == 0:
-        print("SWITCH PLAY LIST NEXT")
-        return bytes(switch_playlist(devices[0].id, 0))
-    elif devices[0].track_list.hash_prev == 0:
-        print("SWITCH PLAY LIST PREV")
-        return bytes(switch_playlist(devices[0].id, 1))
+        return bytes(switch_playlist(devices[0].id, playlist.track_num - 1))
 
     return bytes(build_resp_ack(devices[0].id, package.head.type))
 
@@ -187,16 +212,21 @@ def track_transmission():
         print("ERROR")
         return bytes(ERROR)
 
+    if playlist.switch_track == 1:
+        print(f"UPDATE playlist track pos {playlist.track_num - 1}")
+        playlist.switch_track = 0
+        return bytes(switch_playlist(devices[0].id, playlist.track_num - 1))
+
     track_hash: int = int.from_bytes(package.body[:2], "little")
     track_pack_num: int = int.from_bytes(package.body[2:4], "little")
     print(f"req of {track_pack_num} pack")
     print(f"req of {track_hash}")
 
-    tracklist_index: int = find_track_by_hash(track_list, track_hash)
+    tracklist_index: int = find_track_by_hash(playlist.device_track_list, track_hash)
     if tracklist_index is None:
         print("WARNING: unexpected track hash")
         return bytes(ERROR)
-    track: Track = track_list[tracklist_index]
+    track: Track = playlist.device_track_list[tracklist_index]
     if track_pack_num == 0:
         track.file_by_packs = parce_music_file(track.path)
 
@@ -223,6 +253,25 @@ def get_message():
     return jsonify("ERROR: NO CONNECTED DEV")
 
 
+@app.route(test_user, methods=['POST', 'GET'])
+def test_usr_req():
+    index_list = random.randint(0, 100)
+    print(requests[index_list])
+    track_name = download_user_req(client, playlist, requests[index_list])
+    if track_name is None:
+        return jsonify("ERROR: NO CONNECTED DEV")
+
+    update_playlist(playlist, track_name)
+    print(playlist.track_num, playlist.device_track_list[playlist.track_num - 1].path)
+    return jsonify("ERROR: NO CONNECTED DEV")
+
+
+def update_playlist(playlist: PlayList, track_name: str):
+    playlist.device_track_list.append(Track(os.getcwd() + "/" + track_name, playlist.track_num))
+    playlist.track_num += 1
+    playlist.switch_track = 1
+
+
 def get_device_id() -> int:
     if not devices:
         return 0
@@ -234,11 +283,12 @@ def run_server():
 
 
 if __name__ == '__main__':
-    files = [f for f in os.listdir(os.getcwd()) if isfile(join(os.getcwd(), f))]
-    num: int = 0
-    for file in files:
-        if ".mp3" in file:
-            track_list.append(Track(os.getcwd() + "/" + file, num))
-            num += 1
-
+    # files = [f for f in os.listdir(os.getcwd()) if isfile(join(os.getcwd(), f))]
+    # num: int = 0
+    # for file in files:
+    #     if ".mp3" in file:
+    #         playlist.device_track_list.append(Track(os.getcwd() + "/" + file, num))
+    #         num += 1
+    # playlist.switch_track = 1
+    # playlist.track_num = 1
     run_server()

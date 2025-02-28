@@ -1,7 +1,3 @@
-from main import run_server
-from yandex_api import ya_init_client, user_command, PlayList
-import random
-from time import sleep
 
 
 requests = [
@@ -106,22 +102,4 @@ requests = [
     "Давай поставим Би-2 Мой рок-н-ролл на колонке.",
     "Хочу услышать Иван Дорн Стыцамен на колонке."
 ]
-
-
-if __name__ == '__main__':
-    run_server()
-    client = ya_init_client()
-    plist = PlayList()
-
-    DOWNLOAD_TRACK_COUNT: int = 5
-    index_list: list[int] = [0] * DOWNLOAD_TRACK_COUNT
-    time_delay: list[int] = [0] * DOWNLOAD_TRACK_COUNT
-    for i in range(DOWNLOAD_TRACK_COUNT):
-        index_list[i] = random.randint(0, 100)
-        time_delay[i] = random.randint(10, 50)
-
-    for i in range(DOWNLOAD_TRACK_COUNT):
-        print(requests[i], time_delay[i])
-        user_command(client, plist, requests[i])
-        sleep(time_delay[i])
 

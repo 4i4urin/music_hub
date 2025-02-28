@@ -1,8 +1,6 @@
-from yandex_music import Client
 from private import KEY_PHRASE, ya_token
 from crccheck.crc import Crc16Arc
 from os import stat, path, getcwd
-from main import get_device_id, switch_playlist
 
 
 class Track:
@@ -18,10 +16,6 @@ class Track:
         self.queue_num = queue_num
         self.hash_name = Crc16Arc.calc(path.basename(user_path).encode())
         self.file_size = stat(user_path).st_size
-
-
-def ya_init_client():
-    return Client(ya_token).init()
 
 
 def download_track(client, track_id: int, track_index: int) -> str:
@@ -48,12 +42,7 @@ def extract_music_name(text: str) -> str | None:
     return " ".join(text_before[1:])
 
 
-class PlayList:
-    track_num: int = 0
-    track_list: list[Track] = []
-
-
-def user_command(client, playlist: PlayList, text_req: str):
+def download_user_req(client, playlist, text_req: str) -> str | None:
     search_str: str = extract_music_name(text_req)
     if search_str is None:
         print(f"ERROR: can't parse user req: {text_req}")
@@ -78,9 +67,6 @@ def user_command(client, playlist: PlayList, text_req: str):
         return
 
     print(track_id)
-    file_name: str = download_track(client, track_id, playlist.track_num)
-    playlist.track_list.append(Track(getcwd() + "/" + file_name, playlist.track_num))
+    return download_track(client, track_id, playlist.track_num)
 
-    switch_playlist(get_device_id(), playlist.track_num)
-    playlist.track_num += 1
 

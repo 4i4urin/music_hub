@@ -1,6 +1,7 @@
-from private import KEY_PHRASE, ya_token
+from private import KEY_PHRASE
 from crccheck.crc import Crc16Arc
-from os import stat, path, getcwd
+from os import stat, path
+import asyncio
 
 
 class Track:

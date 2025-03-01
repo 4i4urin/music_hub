@@ -197,7 +197,7 @@ def dev_statys():
     # elif devices[0].track_list.hash_prev == 0:
     #     print("SWITCH PLAY LIST PREV")
     #     return bytes(switch_playlist(devices[0].id, 1))
-    if devices[0].track_list.hash_current == 0 and playlist.track_num != 0:
+    if playlist.track_num != 0 and devices[0].track_list.hash_current == 0:
         print("SWITCH PLAY LIST CURRENT")
         return bytes(switch_playlist(devices[0].id, playlist.track_num - 1))
 

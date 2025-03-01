@@ -106,7 +106,7 @@ void task_bt_dev(void *task_param)
         pqueue_data = btdev_read_track_queue(&queue_data);
         if (pqueue_data == NULL)
         {
-            vTaskDelay(100 / portTICK_PERIOD_MS);
+            vTaskDelay(500 / portTICK_PERIOD_MS);
             continue;
         }
         pack_size = pqueue_data->data_len;
@@ -133,7 +133,7 @@ void task_bt_dev(void *task_param)
 
 static t_queue_HttpBtData* btdev_read_track_queue(t_queue_HttpBtData* ptrack_data)
 {
-    const u8_t queue_recive_timout = 10;
+    const u8_t queue_recive_timout = 1;
     printf("TRY read queue\n");
     portBASE_TYPE xStatus = xQueueReceive( QueueHttpBtdev, ptrack_data, queue_recive_timout );
     if ( xStatus == pdPASS )

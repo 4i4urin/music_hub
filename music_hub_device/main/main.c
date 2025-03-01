@@ -14,8 +14,8 @@
 
 #include "client_serv_prot.h"
 
-#define WIFI_TASK_SIZE (5120)
-#define HTTP_TASK_SIZE (18432)
+#define WIFI_TASK_SIZE (6144)
+#define HTTP_TASK_SIZE (19456)
 #define BT_TASK_SIZE (5120)
 
 volatile QueueHandle_t QueueHttpBtdev;

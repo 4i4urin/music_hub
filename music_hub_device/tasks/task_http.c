@@ -17,7 +17,7 @@
 
 
 #define WAIT_RESP_COUNT_MAX     50
-#define HTTP_WAIT_RESP_TIME_GAP      (100 / portTICK_PERIOD_MS)
+#define HTTP_WAIT_RESP_TIME_GAP (100 / portTICK_PERIOD_MS)
 #define HTTP_WAIT_TO_REPEAT     (500 / portTICK_PERIOD_MS)
 
 

@@ -272,6 +272,21 @@ def update_playlist(playlist: PlayList, track_name: str):
     playlist.switch_track = 1
 
 
+@app.route(yandex_req, methods=['POST', 'GET'])
+def yandex_req():
+    print("Hello yandex")
+    dict = request.get_json()
+    print(dict["user_phrase"])
+    user_req = dict["user_phrase"]
+    track_name = download_user_req(client, playlist, user_req)
+    if track_name is None:
+        return jsonify("ERROR: NO CONNECTED DEV")
+
+    update_playlist(playlist, track_name)
+    print(playlist.track_num, playlist.device_track_list[playlist.track_num - 1].path)
+    return jsonify("Hello world")
+
+
 def get_device_id() -> int:
     if not devices:
         return 0
